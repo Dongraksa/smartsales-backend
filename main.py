@@ -528,12 +528,12 @@ def get_reorder_points():
 
 
 # --- 3. REAL-DATA RFM ANALYSIS ---
+# --- 3. REAL-DATA RFM ANALYSIS (ปรับเกรดเงื่อนไขให้สมจริงขึ้น) ---
 @app.get("/api/v1/analytics/rfm")
 def get_rfm_analysis():
     now = datetime.now()
     valid_orders = [o for o in orders_db if o.get("status") in ["Paid", "Completed"]]
     
-    # รวบรวมข้อมูลพฤติกรรมการซื้อแยกตามชื่อลูกค้าจริง
     customer_stats = defaultdict(lambda: {"last_date": None, "frequency": 0, "monetary": 0.0})
     
     for order in valid_orders:
@@ -558,17 +558,20 @@ def get_rfm_analysis():
         f = stats["frequency"]
         m = stats["monetary"]
         
-        # ให้คะแนน R-F-M จากสถิติการใช้งานจริง
-        r_score = 5 if recency_days <= 7 else (4 if recency_days <= 15 else (3 if recency_days <= 30 else (2 if recency_days <= 60 else 1)))
-        f_score = 5 if f >= 10 else (4 if f >= 5 else (3 if f >= 3 else (2 if f >= 2 else 1)))
-        m_score = 5 if m >= 10000 else (4 if m >= 5000 else (3 if m >= 2000 else (2 if m >= 500 else 1)))
+        # ให้คะแนน R-F-M
+        r_score = 5 if recency_days <= 3 else (4 if recency_days <= 7 else (3 if recency_days <= 14 else (2 if recency_days <= 30 else 1)))
+        f_score = 5 if f >= 5 else (4 if f >= 3 else (3 if f >= 2 else 1))
+        m_score = 5 if m >= 1000 else (4 if m >= 500 else (3 if m >= 300 else 1))
         
-        if r_score >= 4 and f_score >= 4:
+        # ปรับกลุ่ม Segment ให้ยืดหยุ่นขึ้นตามพฤติกรรมจริง
+        if f_score >= 4 or m_score >= 4:
             segment = "Champions (ลูกค้า VIP)"
-        elif r_score >= 3 and f_score >= 3:
+        elif f_score >= 2 or m_score >= 3:
             segment = "Loyal Customers (ลูกค้าประจำ)"
-        elif r_score <= 2 and f_score >= 2:
+        elif recency_days > 14:
             segment = "At Risk (เสี่ยงเลิกซื้อ)"
+        elif f == 1:
+            segment = "New Customer (ลูกค้าใหม่)"
         else:
             segment = "General Customer (ลูกค้าทั่วไป)"
             
@@ -582,7 +585,6 @@ def get_rfm_analysis():
         })
         
     return {"status": "success", "rfm_data": rfm_results}
-
 
 # --- PROMOTIONS API ENDPOINTS ---
 @app.get("/api/v1/admin/promotions")
