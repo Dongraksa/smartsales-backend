@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>สมัครสมาชิก - SmartSales</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Prompt', sans-serif; }
+        body { 
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); 
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .register-card {
+            width: 100%;
+            max-width: 480px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            background: #ffffff;
+            overflow: hidden;
+        }
+        .register-header {
+            background: #1e293b;
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="register-card p-0 m-3">
+        <div class="register-header">
+            <h3 class="fw-bold mb-1">☕ SmartSales</h3>
+            <p class="text-white-50 small mb-0">สมัครสมาชิกผู้ซื้อสินค้าใหม่</p>
+        </div>
+
+        <div class="p-4">
+            <div id="alert-box" class="alert d-none py-2 small" role="alert"></div>
+
+            <form onsubmit="handleRegister(event)">
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">ชื่อ - นามสกุล</label>
+                    <input type="text" id="reg-name" class="form-control rounded-3" placeholder="เช่น สมชาย สายเปย์" required>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">อีเมล</label>
+                    <input type="email" id="reg-email" class="form-control rounded-3" placeholder="user@example.com" required>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">เบอร์โทรศัพท์</label>
+                    <input type="tel" id="reg-phone" class="form-control rounded-3" placeholder="0812345678" required>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">รหัสผ่าน</label>
+                        <input type="password" id="reg-password" class="form-control rounded-3" placeholder="••••••••" required minlength="3">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">ยืนยันรหัสผ่าน</label>
+                        <input type="password" id="reg-confirm-password" class="form-control rounded-3" placeholder="••••••••" required minlength="3">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 py-2 rounded-3 fw-bold mb-3">ยืนยันการสมัครสมาชิก</button>
+            </form>
+
+            <div class="text-center mt-3 pt-3 border-top">
+                <span class="small text-muted">มีบัญชีอยู่แล้ว?</span>
+                <a href="/login.html" class="small fw-bold text-decoration-none ms-1">เข้าสู่ระบบที่นี่</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        async function handleRegister(event) {
+            event.preventDefault();
+            const alertBox = document.getElementById('alert-box');
+            alertBox.classList.add('d-none');
+
+            const fullName = document.getElementById('reg-name').value.trim();
+            const email = document.getElementById('reg-email').value.trim();
+            const phone = document.getElementById('reg-phone').value.trim();
+            const password = document.getElementById('reg-password').value;
+            const confirmPassword = document.getElementById('reg-confirm-password').value;
+
+            if (password !== confirmPassword) {
+                alertBox.className = 'alert alert-danger py-2 small';
+                alertBox.innerText = '⚠️ รหัสผ่านและการยืนยันรหัสผ่านไม่ตรงกัน';
+                alertBox.classList.remove('d-none');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/v1/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ full_name: fullName, email, phone, password })
+                });
+
+                const data = await res.json();
+
+                if (res.ok && data.status === 'success') {
+                    alertBox.className = 'alert alert-success py-2 small';
+                    alertBox.innerText = '✅ สมัครสมาชิกสำเร็จ! กำลังไปหน้าล็อกอิน...';
+                    alertBox.classList.remove('d-none');
+
+                    setTimeout(() => {
+                        window.location.href = '/login.html';
+                    }, 1200);
+                } else {
+                    alertBox.className = 'alert alert-danger py-2 small';
+                    alertBox.innerText = data.detail || 'เกิดข้อผิดพลาดในการสมัครสมาชิก';
+                    alertBox.classList.remove('d-none');
+                }
+            } catch (err) {
+                alertBox.className = 'alert alert-danger py-2 small';
+                alertBox.innerText = 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์';
+                alertBox.classList.remove('d-none');
+            }
+        }
+    </script>
+</body>
+</html>

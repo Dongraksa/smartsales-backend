@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>เข้าสู่ระบบ - SmartSales</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Prompt', sans-serif; }
+        body { 
+            background: linear-gradient(135deg, #f4ccda 0%, #f7f4f6 100%); 
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-card {
+            width: 100%;
+            max-width: 420px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            background: #ffffff;
+            overflow: hidden;
+        }
+        .login-header {
+            background: #1e293b;
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .nav-pills .nav-link {
+            border-radius: 10px;
+            color: #64748b;
+            font-weight: 500;
+        }
+        .nav-pills .nav-link.active {
+            background-color: #0d6efd;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="login-card p-0 m-3">
+        <div class="login-header">
+            <h3 class="fw-bold mb-1">SmartSales</h3>
+            <p class="text-white-50 small mb-0">ระบบเข้าสู่ระบบบริหารจัดการร้านค้า</p>
+        </div>
+
+        <div class="p-4">
+            <ul class="nav nav-pills nav-justified mb-3 p-1 bg-light rounded-3" role="tablist">
+                <li class="nav-item">
+                    <button class="nav-link active py-2 small" id="customer-tab" onclick="switchRole('customer')">ผู้ซื้อสินค้า</button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link py-2 small" id="admin-tab" onclick="switchRole('admin')">ผู้ดูแลระบบ</button>
+                </li>
+            </ul>
+
+            <div id="alert-box" class="alert alert-danger d-none py-2 small" role="alert"></div>
+
+            <form onsubmit="handleLogin(event)">
+                <input type="hidden" id="login-role" value="customer">
+
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">อีเมล</label>
+                    <input type="email" id="login-email" class="form-control rounded-3" placeholder="admin@example.com หรือ user@example.com" required>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label small fw-semibold">รหัสผ่าน</label>
+                    <input type="password" id="login-password" class="form-control rounded-3" placeholder="••••••••" required>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 py-2 rounded-3 fw-bold mb-3">เข้าสู่ระบบ</button>
+            </form>
+
+            <div class="text-center mt-3 pt-3 border-top">
+                <span class="small text-muted">ยังไม่มีบัญชีผู้ซื้อ?</span>
+                <a href="/register.html" class="small fw-bold text-decoration-none ms-1">สมัครสมาชิกที่นี่</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentRole = 'customer';
+
+        function switchRole(role) {
+            currentRole = role;
+            document.getElementById('login-role').value = role;
+            document.getElementById('customer-tab').classList.toggle('active', role === 'customer');
+            document.getElementById('admin-tab').classList.toggle('active', role === 'admin');
+
+            if (role === 'admin') {
+                document.getElementById('login-email').value = 'admin@example.com';
+                document.getElementById('login-password').value = 'admin';
+            } else {
+                document.getElementById('login-email').value = '';
+                document.getElementById('login-password').value = '';
+            }
+        }
+
+        async function handleLogin(event) {
+            event.preventDefault();
+            const alertBox = document.getElementById('alert-box');
+            alertBox.classList.add('d-none');
+
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+
+            try {
+                const res = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password, role: currentRole })
+                });
+
+                const data = await res.json();
+
+                if (res.ok && data.status === 'success') {
+                    sessionStorage.setItem('token', data.token);
+                    sessionStorage.setItem('role', data.role);
+                    sessionStorage.setItem('user_name', data.name);
+
+                    if (data.role === 'admin') {
+                        window.location.href = '/admin.html';
+                    } else {
+                        window.location.href = '/index.html';
+                    }
+                } else {
+                    alertBox.innerText = data.detail || 'เข้าสู่ระบบไม่สำเร็จ';
+                    alertBox.classList.remove('d-none');
+                }
+            } catch (err) {
+                alertBox.innerText = 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์';
+                alertBox.classList.remove('d-none');
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบจัดการหลังบ้าน SmartSales Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { font-family: 'Prompt', sans-serif; }
+        body { background-color: #f4f6f9; min-height: 100vh; }
+        .sidebar { min-height: 100vh; background: #1e293b; color: white; }
+        .sidebar .nav-link { color: #94a3b8; border-radius: 10px; padding: 12px 16px; margin-bottom: 6px; font-weight: 500; cursor: pointer; }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active { background: #0d6efd; color: white; }
+        
+        /* การ์ดสรุปแบบคลิกได้ */
+        .stat-card-clickable { 
+            border: none; 
+            border-radius: 16px; 
+            transition: all 0.25s ease-in-out; 
+            cursor: pointer; 
+            position: relative;
+            overflow: hidden;
+        }
+        .stat-card-clickable:hover { 
+            transform: translateY(-5px); 
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15) !important;
+            filter: brightness(1.03);
+        }
+        .stat-card-clickable .click-hint {
+            font-size: 0.75rem;
+            opacity: 0.85;
+            margin-top: 8px;
+            display: inline-block;
+        }
+
+        .card-custom { border-radius: 16px; border: none; }
+        .rule-card { background: #eef2ff; border-left: 4px solid #4f46e5; border-radius: 8px; }
+        .summary-box { background-color: #f8fafc; border-radius: 12px; border: 1px dashed #cbd5e1; }
+        .product-img-thumb { width: 45px; height: 45px; object-fit: cover; border-radius: 8px; }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar เมนูซ้ายมือ -->
+            <div class="col-md-3 col-lg-2 sidebar p-3 shadow">
+                <h4 class="fw-bold text-white my-3 ps-2">☕ SmartSales</h4>
+                <p class="text-muted small ps-2 mb-2">ผู้บริหาร: <span id="admin-user-display" class="text-info fw-bold">Admin</span></p>
+                <hr class="border-secondary">
+                <ul class="nav nav-pills flex-column mb-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" id="menu-dashboard" onclick="switchPage('dashboard', this)">📊 แดชบอร์ดวิเคราะห์</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="menu-orders" onclick="switchPage('orders', this)">📦 จัดการคำสั่งซื้อ</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="menu-products" onclick="switchPage('products', this)">🏷️ จัดการสินค้า</a>
+                    </li>
+                </ul>
+                <hr class="border-secondary mt-5">
+                <div class="d-flex flex-column gap-2">
+                    <a href="/" class="btn btn-outline-light btn-sm w-100 rounded-3">🏪 ไปหน้าขาย (Storefront)</a>
+                    <button onclick="logoutAdmin()" class="btn btn-outline-danger btn-sm w-100 rounded-3">🚪 ออกจากระบบ</button>
+                </div>
+            </div>
+
+            <!-- Content Area ฝั่งขวา -->
+            <div class="col-md-9 col-lg-10 p-4">
+                
+                <!-- Page 1: แดชบอร์ด & Analytics -->
+                <div id="page-dashboard" class="page-content">
+                    <h4 class="fw-bold text-dark mb-4">📊 แดชบอร์ดสรุปผลและการวิเคราะห์</h4>
+                    
+                    <!-- การ์ดตัวเลขสรุป (กดคลิกดูรายละเอียดได้) -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <div class="card stat-card-clickable p-3 shadow-sm bg-primary text-white" onclick="openRevenueModal()">
+                                <small class="opacity-75">ยอดขายรวมทั้งหมด</small>
+                                <h2 class="fw-bold mb-0 mt-1"><span id="total-revenue">0</span> ฿</h2>
+                                <span class="click-hint">🔍 กดเพื่อดูรายละเอียดช่องทางชำระเงิน</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card stat-card-clickable p-3 shadow-sm bg-success text-white" onclick="goToOrdersPage()">
+                                <small class="opacity-75">จำนวนคำสั่งซื้อทั้งหมด</small>
+                                <h2 class="fw-bold mb-0 mt-1"><span id="total-orders">0</span> รายการ</h2>
+                                <span class="click-hint">➔ กดเพื่อไปยังรายการคำสั่งซื้อ</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card stat-card-clickable p-3 shadow-sm bg-warning text-dark" onclick="openLowStockModal()">
+                                <small class="opacity-75">สินค้าต้องรีบเติมสต็อก (&lt;20)</small>
+                                <h2 class="fw-bold mb-0 mt-1"><span id="low-stock">0</span> รายการ</h2>
+                                <span class="click-hint">⚠️ กดเพื่อดูรายการสินค้าใกล้หมดสต็อก</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- กราฟวิเคราะห์พร้อมข้อสรุปตัวหนังสือ -->
+                    <div class="row g-4 mb-4">
+                        <!-- Peak Hours -->
+                        <div class="col-lg-6">
+                            <div class="card card-custom shadow-sm p-4 h-100 d-flex flex-column justify-content-between">
+                                <div>
+                                    <h5 class="fw-bold mb-3 text-secondary">📈 ช่วงเวลาขายดี (Peak Hours Analysis)</h5>
+                                    <div style="position: relative; height:240px;">
+                                        <canvas id="peakHoursChart"></canvas>
+                                    </div>
+                                </div>
+                                <div class="summary-box p-3 mt-3">
+                                    <h6 class="fw-bold text-primary mb-1">📌 สรุปพฤติกรรมช่วงเวลาขาย:</h6>
+                                    <p class="small text-secondary mb-0" id="peak-summary-text">กำลังวิเคราะห์ข้อมูลช่วงเวลาขายดี...</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ABC Analysis -->
+                        <div class="col-lg-6">
+                            <div class="card card-custom shadow-sm p-4 h-100 d-flex flex-column justify-content-between">
+                                <div>
+                                    <h5 class="fw-bold mb-3 text-secondary">🍕 สัดส่วนยอดขายสินค้า (ABC Analysis)</h5>
+                                    <div style="position: relative; height:240px;" class="d-flex justify-content-center">
+                                        <canvas id="abcChart"></canvas>
+                                    </div>
+                                </div>
+                                <div class="summary-box p-3 mt-3">
+                                    <h6 class="fw-bold text-success mb-1">📌 สรุปโครงสร้างยอดขายสินค้า:</h6>
+                                    <p class="small text-secondary mb-0" id="abc-summary-text">กำลังวิเคราะห์จัดกลุ่มสินค้าขายดี...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AI Market Basket Analysis -->
+                    <div class="card card-custom shadow-sm p-4">
+                        <h5 class="fw-bold mb-3 text-secondary">💡 AI Market Basket Analysis (Apriori Model)</h5>
+                        <div id="analytics-container">กำลังคำนวณข้อมูล...</div>
+                    </div>
+                </div>
+
+                <!-- Page 2: จัดการคำสั่งซื้อ -->
+                <div id="page-orders" class="page-content d-none">
+                    <h4 class="fw-bold text-dark mb-4">📦 จัดการคำสั่งซื้อ (Live Orders)</h4>
+                    <div class="card card-custom shadow-sm p-4">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>รหัสออเดอร์</th>
+                                        <th>วัน-เวลา</th>
+                                        <th>รายการสินค้าที่สั่ง</th>
+                                        <th>ช่องทางชำระ</th>
+                                        <th>ยอดรวม</th>
+                                        <th>สถานะออเดอร์</th>
+                                        <th class="text-center">การจัดการ</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="orders-table"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Page 3: จัดการสินค้า -->
+                <div id="page-products" class="page-content d-none">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h4 class="fw-bold text-dark mb-0">🏷️ จัดการรายการสินค้าและสต็อก</h4>
+                        <button class="btn btn-primary fw-medium rounded-3" onclick="openAddProductModal()">+ เพิ่มสินค้าใหม่</button>
+                    </div>
+                    <div class="card card-custom shadow-sm p-4">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>รูปภาพ</th>
+                                        <th>ชื่อสินค้า</th>
+                                        <th>ราคาต้นทุน</th>
+                                        <th>ราคาขาย</th>
+                                        <th>สต็อกคงเหลือ</th>
+                                        <th class="text-center">การจัดการ</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="products-management-table"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 1: ดูรายละเอียดการ์ดยอดขายรวม -->
+    <div class="modal fade" id="revenueDetailModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 border-0 p-3">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="fw-bold text-primary">💰 รายละเอียดสรุปยอดขาย</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="text-center p-3 bg-light rounded-3 mb-3">
+                        <small class="text-muted d-block">ยอดขายรวมทั้งหมด</small>
+                        <h2 class="fw-bold text-primary mb-0"><span id="modal-total-rev">0</span> ฿</h2>
+                    </div>
+                    <h6 class="fw-bold mb-2">แยกตามช่องทางการชำระเงิน</h6>
+                    <ul class="list-group list-group-flush mb-3">
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <span>📱 PromptPay (สแกนจ่าย)</span>
+                            <span class="fw-bold text-dark" id="modal-pay-promptpay">0 ฿</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <span>💵 Cash (เงินสด)</span>
+                            <span class="fw-bold text-dark" id="modal-pay-cash">0 ฿</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-0 border-top mt-2 pt-2">
+                            <span class="text-muted">ยอดขายเฉลี่ยต่อออเดอร์ (AOV)</span>
+                            <span class="fw-bold text-success" id="modal-avg-order">0 ฿</span>
+                        </li>
+                    </ul>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-secondary w-100 rounded-3" data-bs-dismiss="modal">ปิด</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 2: ดูรายการสินค้าต้องรีบเติมสต็อก -->
+    <div class="modal fade" id="lowStockModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 border-0 p-3">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="fw-bold text-warning text-dark">⚠️ รายการสินค้าใกล้หมดสต็อก (&lt; 20 ชิ้น)</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <ul class="list-group list-group-flush mb-3" id="low-stock-items-list">
+                    </ul>
+                </div>
+                <div class="modal-footer border-0 pt-0 d-flex gap-2">
+                    <button type="button" class="btn btn-light flex-grow-1" data-bs-dismiss="modal">ปิด</button>
+                    <button type="button" class="btn btn-primary flex-grow-1" onclick="goToProductsPage()">ไปเติมสต็อกสินค้า ➔</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 3: ดูรายละเอียดออเดอร์ + ปรับเปลี่ยนสถานะ -->
+    <div class="modal fade" id="orderDetailsModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 border-0 p-3">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="fw-bold" id="orderDetailsTitle">รายละเอียดออเดอร์</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="p-3 bg-light rounded-3 mb-3 border">
+                        <label class="form-label fw-bold text-dark mb-1">สถานะคำสั่งซื้อปัจจุบัน:</label>
+                        <select class="form-select form-select-sm fw-medium mb-2" id="detail-status-select" onchange="changeOrderStatusInModal(this.value)">
+                            <option value="Pending">รอดำเนินการ (Pending)</option>
+                            <option value="Paid">ชำระเงินแล้ว (Paid)</option>
+                            <option value="Completed">สำเร็จแล้ว (Completed)</option>
+                        </select>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted small">เวลาที่สั่งซื้อ:</span>
+                            <span class="fw-medium small text-dark" id="detail-time">-</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted small">ช่องทางการชำระเงิน:</span>
+                            <span class="badge bg-secondary" id="detail-payment">-</span>
+                        </div>
+                    </div>
+
+                    <h6 class="fw-bold mb-2">รายการสินค้าที่สั่ง</h6>
+                    <ul class="list-group list-group-flush mb-3" id="detail-items-list">
+                    </ul>
+
+                    <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+                        <span class="fw-bold">ยอดรวมทั้งสิ้น:</span>
+                        <span class="fs-4 fw-bold text-primary" id="detail-total-amount">0 ฿</span>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-secondary w-100 rounded-3" data-bs-dismiss="modal">ปิดหน้าต่าง</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 4: เพิ่ม/แก้ไขสินค้า -->
+    <div class="modal fade" id="productModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 border-0 p-3">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="fw-bold" id="productModalTitle">เพิ่มสินค้าใหม่</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="productForm">
+                        <input type="hidden" id="prod-id">
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold">ชื่อสินค้า</label>
+                            <input type="text" class="form-control" id="prod-name" placeholder="เช่น กาแฟอเมริกาโน่" required>
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col">
+                                <label class="form-label small fw-semibold">ราคาต้นทุน (บาท)</label>
+                                <input type="number" class="form-control" id="prod-cost" value="0" step="0.01" required>
+                            </div>
+                            <div class="col">
+                                <label class="form-label small fw-semibold">ราคาขาย (บาท)</label>
+                                <input type="number" class="form-control" id="prod-price" value="0" step="0.01" required>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold">จำนวนสต็อกเริ่มต้น</label>
+                            <input type="number" class="form-control" id="prod-stock" value="50" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold">อัปโหลดรูปภาพสินค้า</label>
+                            <input type="file" class="form-control" id="prod-file" accept="image/*" onchange="previewImage(event)">
+                        </div>
+                        
+                        <div class="text-center mt-2 d-none" id="preview-container">
+                            <small class="text-muted d-block mb-1">ตัวอย่างรูปภาพ:</small>
+                            <img id="img-preview" src="" style="max-height: 120px; border-radius: 8px; border: 1px solid #ddd;">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="button" class="btn btn-primary px-4" onclick="saveProduct()">บันทึกข้อมูล</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // --- 🔒 SECURITY AUTH CHECK ---
+        (function checkAdminAuth() {
+            const role = sessionStorage.getItem('role');
+            if (role !== 'admin') {
+                alert('⚠️ คุณไม่มีสิทธิ์เข้าถึงหน้านี้ กรุณาเข้าสู่ระบบในฐานะ Admin');
+                window.location.href = '/login.html';
+            }
+        })();
+
+        let peakChartInstance = null;
+        let abcChartInstance = null;
+        let productModalObj = null;
+        let orderDetailsModalObj = null;
+        let revenueModalObj = null;
+        let lowStockModalObj = null;
+
+        let globalOrdersData = [];
+        let globalProductsData = [];
+        let currentSelectedSaleId = null;
+
+        document.addEventListener("DOMContentLoaded", function() {
+            // แสดงชื่อแอดมินถ้ามี
+            const adminName = sessionStorage.getItem('user_name') || 'Admin';
+            document.getElementById('admin-user-display').innerText = adminName;
+
+            productModalObj = new bootstrap.Modal(document.getElementById('productModal'));
+            orderDetailsModalObj = new bootstrap.Modal(document.getElementById('orderDetailsModal'));
+            revenueModalObj = new bootstrap.Modal(document.getElementById('revenueDetailModal'));
+            lowStockModalObj = new bootstrap.Modal(document.getElementById('lowStockModal'));
+
+            loadDashboardData();
+        });
+
+        function logoutAdmin() {
+            sessionStorage.clear();
+            window.location.href = '/login.html';
+        }
+
+        function switchPage(pageName, element) {
+            document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+            if (element) element.classList.add('active');
+
+            document.querySelectorAll('.page-content').forEach(el => el.classList.add('d-none'));
+            document.getElementById(`page-${pageName}`).classList.remove('d-none');
+
+            if (pageName === 'dashboard') loadDashboardData();
+            if (pageName === 'orders') loadOrders();
+            if (pageName === 'products') loadProductsManagement();
+        }
+
+        function goToOrdersPage() {
+            switchPage('orders', document.getElementById('menu-orders'));
+        }
+
+        function goToProductsPage() {
+            lowStockModalObj.hide();
+            switchPage('products', document.getElementById('menu-products'));
+        }
+
+        // --- DASHBOARD & ANALYTICS ---
+        async function loadDashboardData() {
+            try {
+                const res = await fetch('/api/v1/admin/dashboard-summary');
+                const data = await res.json();
+                document.getElementById('total-revenue').innerText = data.total_revenue ? data.total_revenue.toLocaleString() : '0';
+                document.getElementById('total-orders').innerText = data.total_orders || 0;
+                document.getElementById('low-stock').innerText = data.low_stock_count || 0;
+
+                // โหลดข้อมูลออเดอร์และสินค้าเพื่อเก็บเข้าตัวแปรส่วนกลาง
+                const ordersRes = await fetch('/api/v1/admin/orders');
+                globalOrdersData = await ordersRes.json();
+
+                const productsRes = await fetch('/api/v1/products');
+                globalProductsData = await productsRes.json();
+
+                loadPeakHoursChart();
+                loadABCChart();
+                loadAnalytics();
+            } catch (err) {
+                console.error('Error loading dashboard data:', err);
+            }
+        }
+
+        // --- CLICK CARD MODAL HANDLERS ---
+        function openRevenueModal() {
+            let promptpayTotal = 0;
+            let cashTotal = 0;
+            let totalRev = 0;
+
+            globalOrdersData.forEach(o => {
+                totalRev += o.total_amount;
+                if (o.payment_method === 'PromptPay') promptpayTotal += o.total_amount;
+                if (o.payment_method === 'Cash') cashTotal += o.total_amount;
+            });
+
+            const totalOrders = globalOrdersData.length;
+            const avgOrderValue = totalOrders > 0 ? (totalRev / totalOrders) : 0;
+
+            document.getElementById('modal-total-rev').innerText = totalRev.toLocaleString();
+            document.getElementById('modal-pay-promptpay').innerText = `${promptpayTotal.toLocaleString()} ฿`;
+            document.getElementById('modal-pay-cash').innerText = `${cashTotal.toLocaleString()} ฿`;
+            document.getElementById('modal-avg-order').innerText = `${avgOrderValue.toFixed(2)} ฿`;
+
+            revenueModalObj.show();
+        }
+
+        function openLowStockModal() {
+            const lowStockItems = globalProductsData.filter(p => p.stock_quantity < 20);
+            const listContainer = document.getElementById('low-stock-items-list');
+
+            if (lowStockItems.length === 0) {
+                listContainer.innerHTML = '<li class="list-group-item text-center text-success py-3">✅ สินค้าทุกรายการมีสต็อกเพียงพอ</li>';
+            } else {
+                listContainer.innerHTML = lowStockItems.map(p => `
+                    <li class="list-group-item d-flex align-items-center justify-content-between px-0 py-2">
+                        <div class="d-flex align-items-center">
+                            <img src="${p.image_url || 'https://via.placeholder.com/45'}" class="product-img-thumb me-3 border">
+                            <div>
+                                <div class="fw-semibold text-dark">${p.product_name}</div>
+                                <small class="text-muted">ราคาขาย ${p.selling_price} ฿</small>
+                            </div>
+                        </div>
+                        <span class="badge bg-danger fs-6">${p.stock_quantity} ชิ้น</span>
+                    </li>
+                `).join('');
+            }
+
+            lowStockModalObj.show();
+        }
+
+        async function loadPeakHoursChart() {
+            try {
+                const res = await fetch('/api/v1/analytics/peak-hours');
+                const data = await res.json();
+                const ctx = document.getElementById('peakHoursChart').getContext('2d');
+                if (peakChartInstance) peakChartInstance.destroy();
+
+                peakChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.map(d => d.hour),
+                        datasets: [{ label: 'ยอดขาย (บาท)', data: data.map(d => d.total_revenue), borderColor: '#0d6efd', backgroundColor: 'rgba(13, 110, 253, 0.1)', fill: true, tension: 0.3 }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+                });
+
+                if (data.length > 0) {
+                    const maxPeak = data.reduce((prev, current) => (prev.total_revenue > current.total_revenue) ? prev : current);
+                    document.getElementById('peak-summary-text').innerHTML = `
+                        ยอดขายสูงสุดอยู่ในช่วงเวลา <b>${maxPeak.hour}</b> (สร้างรายได้ <b>${maxPeak.total_revenue.toLocaleString()} ฿</b> จาก ${maxPeak.total_orders} ออเดอร์)<br>
+                        💡 <b>คำแนะนำ:</b> ควรเตรียมวัตถุดิบและจัดกำลังพนักงานให้พร้อมก่อนช่วงเวลา <b>${maxPeak.hour}</b> เพื่อลดเวลารอของลูกค้า
+                    `;
+                } else {
+                    document.getElementById('peak-summary-text').innerText = 'ยังไม่มีข้อมูลการขายเพียงพอในการสรุปผล';
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function loadABCChart() {
+            try {
+                const res = await fetch('/api/v1/analytics/abc-analysis');
+                const data = await res.json();
+                const ctx = document.getElementById('abcChart').getContext('2d');
+                if (abcChartInstance) abcChartInstance.destroy();
+
+                abcChartInstance = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: data.map(d => d.product_name),
+                        datasets: [{ data: data.map(d => d.revenue), backgroundColor: ['#0d6efd', '#198754', '#ffc107', '#dc3545', '#0dcaf0', '#6c757d'] }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+
+                if (data.length > 0) {
+                    const topProd = data[0];
+                    const totalRev = data.reduce((sum, item) => sum + item.revenue, 0);
+                    const percent = totalRev > 0 ? ((topProd.revenue / totalRev) * 100).toFixed(1) : 0;
+                    
+                    document.getElementById('abc-summary-text').innerHTML = `
+                        สินค้าทำรายได้อันดับ 1 คือ <b>${topProd.product_name}</b> กวาดรายได้ไป <b>${topProd.revenue.toLocaleString()} ฿</b> (คิดเป็น <b>${percent}%</b> ของยอดขายทั้งหมด)<br>
+                        💡 <b>คำแนะนำ:</b> จัดเป็นสินค้ากลุ่ม Star ควรคุมคุณภาพให้คงที่ และจัดโปรโมชันจับคู่กับสินค้าที่ขายได้น้อยเพื่อดันยอดขายรวม
+                    `;
+                } else {
+                    document.getElementById('abc-summary-text').innerText = 'ยังไม่มีข้อมูลการขายเพียงพอในการสรุปผล';
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function loadAnalytics() {
+            try {
+                const res = await fetch('/api/v1/analytics/market-basket?min_support=0.1&min_confidence=0.1');
+                const data = await res.json();
+                const container = document.getElementById('analytics-container');
+                if (data.status === 'success' && data.rules.length > 0) {
+                    container.innerHTML = data.rules.map(r => `
+                        <div class="rule-card p-3 mb-2 shadow-sm">
+                            <small class="text-primary fw-bold">กฎการสั่งซื้อร่วมกัน:</small><br>
+                            <b>${r.antecedents.join(', ')}</b> ➔ <b>${r.consequents.join(', ')}</b>
+                            <div class="mt-1"><small class="text-muted">ความเชื่อมั่น (Confidence): ${(r.confidence*100).toFixed(0)}% | ค่า Lift: ${r.lift}</small></div>
+                        </div>
+                    `).join('');
+                } else { container.innerHTML = '<p class="text-muted mb-0">ยังไม่มีข้อมูลเพียงพอสำหรับการประมวลผล</p>'; }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // --- ORDER MANAGEMENT ---
+        async function loadOrders() {
+            const res = await fetch('/api/v1/admin/orders');
+            globalOrdersData = await res.json();
+            const tbody = document.getElementById('orders-table');
+            tbody.innerHTML = '';
+            
+            globalOrdersData.forEach(o => {
+                const itemSummary = o.items.map(i => `${i.product_name} (x${i.quantity})`).join(', ');
+                let badgeClass = o.status === 'Completed' ? 'bg-success' : (o.status === 'Paid' ? 'bg-info' : 'bg-warning text-dark');
+                let statusTH = o.status === 'Pending' ? 'รอดำเนินการ' : (o.status === 'Paid' ? 'ชำระเงินแล้ว' : 'สำเร็จเรียบร้อย');
+                
+                tbody.innerHTML += `
+                    <tr>
+                        <td class="fw-bold">#${o.sale_id}</td>
+                        <td><small class="text-muted">${o.timestamp}</small></td>
+                        <td><small>${itemSummary}</small></td>
+                        <td><span class="badge bg-light text-dark border">${o.payment_method}</span></td>
+                        <td class="fw-bold text-primary">${o.total_amount.toLocaleString()} ฿</td>
+                        <td><span class="badge ${badgeClass}">${statusTH}</span></td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="viewOrderDetails(${o.sale_id})">
+                                👁️ รายละเอียด
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        function viewOrderDetails(saleId) {
+            currentSelectedSaleId = saleId;
+            const order = globalOrdersData.find(o => o.sale_id === saleId);
+            if (!order) return;
+
+            document.getElementById('orderDetailsTitle').innerText = `รายละเอียดออเดอร์ #${order.sale_id}`;
+            document.getElementById('detail-time').innerText = order.timestamp;
+            document.getElementById('detail-payment').innerText = order.payment_method;
+            document.getElementById('detail-status-select').value = order.status;
+
+            const itemsList = document.getElementById('detail-items-list');
+            itemsList.innerHTML = order.items.map(item => `
+                <li class="list-group-item d-flex align-items-center justify-content-between px-0 py-2">
+                    <div class="d-flex align-items-center">
+                        <img src="${item.image_url || 'https://via.placeholder.com/45'}" class="product-img-thumb me-3 border">
+                        <div>
+                            <div class="fw-semibold text-dark">${item.product_name}</div>
+                            <small class="text-muted">จำนวน ${item.quantity} ชิ้น</small>
+                        </div>
+                    </div>
+                    <span class="fw-bold text-dark">${item.subtotal.toLocaleString()} ฿</span>
+                </li>
+            `).join('');
+
+            document.getElementById('detail-total-amount').innerText = `${order.total_amount.toLocaleString()} ฿`;
+            orderDetailsModalObj.show();
+        }
+
+        async function changeOrderStatusInModal(newStatus) {
+            if (!currentSelectedSaleId) return;
+            await fetch(`/api/v1/admin/orders/${currentSelectedSaleId}/status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus })
+            });
+            loadOrders();
+        }
+
+        // --- PRODUCT MANAGEMENT ---
+        function previewImage(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('img-preview').src = e.target.result;
+                    document.getElementById('preview-container').classList.remove('d-none');
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+
+        async function loadProductsManagement() {
+            const res = await fetch('/api/v1/products');
+            globalProductsData = await res.json();
+            const tbody = document.getElementById('products-management-table');
+            tbody.innerHTML = '';
+
+            globalProductsData.forEach(p => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td><img src="${p.image_url || 'https://via.placeholder.com/45'}" class="product-img-thumb border"></td>
+                        <td class="fw-semibold">${p.product_name}</td>
+                        <td>${p.cost_price} ฿</td>
+                        <td class="text-primary fw-bold">${p.selling_price} ฿</td>
+                        <td>
+                            <span class="badge ${p.stock_quantity < 20 ? 'bg-danger' : 'bg-secondary'} me-2">${p.stock_quantity} ชิ้น</span>
+                        </td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-primary me-1" onclick="openEditProductModal(${JSON.stringify(p).replace(/"/g, '&quot;')})">แก้ไข</button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteProduct(${p.product_id})">ลบ</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        function openAddProductModal() {
+            document.getElementById('productModalTitle').innerText = 'เพิ่มสินค้าใหม่';
+            document.getElementById('prod-id').value = '';
+            document.getElementById('prod-name').value = '';
+            document.getElementById('prod-cost').value = '0';
+            document.getElementById('prod-price').value = '0';
+            document.getElementById('prod-stock').value = '50';
+            document.getElementById('prod-file').value = '';
+            document.getElementById('preview-container').classList.add('d-none');
+            productModalObj.show();
+        }
+
+        function openEditProductModal(p) {
+            document.getElementById('productModalTitle').innerText = 'แก้ไขรายการสินค้า';
+            document.getElementById('prod-id').value = p.product_id;
+            document.getElementById('prod-name').value = p.product_name;
+            document.getElementById('prod-cost').value = p.cost_price;
+            document.getElementById('prod-price').value = p.selling_price;
+            document.getElementById('prod-stock').value = p.stock_quantity;
+            document.getElementById('prod-file').value = '';
+            
+            if (p.image_url) {
+                document.getElementById('img-preview').src = p.image_url;
+                document.getElementById('preview-container').classList.remove('d-none');
+            } else {
+                document.getElementById('preview-container').classList.add('d-none');
+            }
+            
+            productModalObj.show();
+        }
+
+        async function saveProduct() {
+            const id = document.getElementById('prod-id').value;
+            const name = document.getElementById('prod-name').value;
+            const cost = document.getElementById('prod-cost').value;
+            const price = document.getElementById('prod-price').value;
+            const stock = document.getElementById('prod-stock').value;
+            const fileInput = document.getElementById('prod-file');
+
+            if (!name) return alert('กรุณากรอกชื่อสินค้า');
+
+            const formData = new FormData();
+            formData.append('product_name', name);
+            formData.append('cost_price', cost);
+            formData.append('selling_price', price);
+            formData.append('stock_quantity', stock);
+
+            if (fileInput.files.length > 0) {
+                formData.append('image_file', fileInput.files[0]);
+            }
+
+            const url = id ? `/api/v1/admin/products/${id}` : '/api/v1/admin/products';
+            const method = id ? 'PUT' : 'POST';
+
+            const res = await fetch(url, {
+                method: method,
+                body: formData
+            });
+
+            if (res.ok) {
+                productModalObj.hide();
+                loadProductsManagement();
+            } else {
+                alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+            }
+        }
+
+        async function deleteProduct(id) {
+            if (confirm('คุณต้องการลบสินค้ารายการนี้ใช่หรือไม่?')) {
+                await fetch(`/api/v1/admin/products/${id}`, { method: 'DELETE' });
+                loadProductsManagement();
+            }
+        }
+    </script>
+</body>
+</html>
