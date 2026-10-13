@@ -1,4 +1,5 @@
 import os
+import json
 import shutil
 import math
 from typing import List, Optional, Any, Dict
@@ -13,8 +14,8 @@ from pydantic import BaseModel
 
 app = FastAPI(
     title="SmartSales Enterprise API",
-    description="ระบบบริหารจัดการร้านค้า สต็อกสินค้า ระบบหลังบ้าน และ Real-Data Analytics (ROP, Market Basket, RFM)",
-    version="2.1.0"
+    description="ระบบบริหารจัดการร้านค้า สต็อกสินค้า ระบบหลังบ้าน และ Real-Data Analytics",
+    version="2.2.0"
 )
 
 # ----------------------------------------------------
@@ -29,8 +30,29 @@ app.add_middleware(
 )
 
 # ----------------------------------------------------
-# 2. ฐานข้อมูลเริ่มต้น (In-Memory / Dynamic Storage)
+# 2. ฟังก์ชันช่วย อ่าน/เขียน ข้อมูล JSON
 # ----------------------------------------------------
+ORDERS_FILE = "mock_orders.json"
+
+def load_orders_data():
+    if os.path.exists(ORDERS_FILE):
+        try:
+            with open(ORDERS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return []
+
+def save_orders_data():
+    try:
+        with open(ORDERS_FILE, "w", encoding="utf-8") as f:
+            json.dump(orders_db, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"Error saving orders: {e}")
+
+# โหลดข้อมูลคำสั่งซื้อเริ่มต้น
+orders_db = load_orders_data()
+
 users_db = [
     {
         "user_id": 1,
@@ -80,33 +102,26 @@ products_db = [
         "image_url": "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=300",
         "lead_time_days": 2,
         "safety_stock": 10
-    }
-]
-
-orders_db = [
-    {
-        "sale_id": 1001,
-        "customer_name": "สมชาย สายเปย์",
-        "timestamp": "2026-10-08 18:30:15",
-        "payment_method": "PromptPay",
-        "total_amount": 120.0,
-        "status": "Paid",
-        "items": [
-            {"product_name": "อเมริกาโน่เย็น (Iced Americano)", "quantity": 1, "subtotal": 55.0, "image_url": "https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=300"},
-            {"product_name": "ลาเต้เย็น (Iced Latte)", "quantity": 1, "subtotal": 65.0, "image_url": "https://images.unsplash.com/photo-1570968915860-54d5c301fa9f?w=300"}
-        ]
     },
     {
-        "sale_id": 1002,
-        "customer_name": "สมหญิง รักสงบ",
-        "timestamp": "2026-10-10 19:15:00",
-        "payment_method": "PromptPay",
-        "total_amount": 100.0,
-        "status": "Paid",
-        "items": [
-            {"product_name": "อเมริกาโน่เย็น (Iced Americano)", "quantity": 1, "subtotal": 55.0, "image_url": "https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=300"},
-            {"product_name": "ครัวซองต์เนยสด (Croissant)", "quantity": 1, "subtotal": 45.0, "image_url": "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=300"}
-        ]
+        "product_id": 4,
+        "product_name": "คัปปุชชีโนเย็น (Iced Cappuccino)",
+        "cost_price": 28.0,
+        "selling_price": 60.0,
+        "stock_quantity": 25,
+        "image_url": "https://images.unsplash.com/photo-1534778101976-62847782c213?w=300",
+        "lead_time_days": 3,
+        "safety_stock": 10
+    },
+    {
+        "product_id": 5,
+        "product_name": "เค้กช็อกโกแลต (Chocolate Cake)",
+        "cost_price": 35.0,
+        "selling_price": 75.0,
+        "stock_quantity": 15,
+        "image_url": "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=300",
+        "lead_time_days": 2,
+        "safety_stock": 5
     }
 ]
 
@@ -178,7 +193,7 @@ def route_register_page():
 @app.post("/api/v1/auth/login")
 def login(data: LoginSchema):
     if data.role == "admin" or data.email == "admin@example.com":
-        if data.password == "admin" or data.password == "1234":
+        if data.password in ["admin", "1234"]:
             return {
                 "status": "success",
                 "role": "admin",
@@ -217,7 +232,7 @@ def register(data: RegisterSchema):
         "user_id": new_user["user_id"]
     }
 
-# --- CHECKOUT & ORDERS HANDLER ---
+# --- CHECKOUT & ORDERS HANDLER (เพิ่มคำสั่งซื้อใหม่และเซฟลง JSON) ---
 @app.post("/api/v1/pos/checkout")
 @app.post("/api/v1/orders")
 @app.post("/api/v1/checkout")
@@ -243,7 +258,6 @@ async def create_order(request: Request):
         subtotal = price * qty
         total_amount += subtotal
         
-        # ตัดสต็อกสินค้าในตารางสินค้าจริง
         prod = next((p for p in products_db if (p_id and p["product_id"] == p_id) or p["product_name"] == p_name), None)
         if prod:
             prod["stock_quantity"] = max(0, prod["stock_quantity"] - qty)
@@ -260,22 +274,31 @@ async def create_order(request: Request):
         payment_method = data.get("payment_method") or data.get("payment") or "PromptPay"
         customer_name = data.get("customer_name") or "ลูกค้าทั่วไป"
         
-    sale_id = 1000 + len(orders_db) + 1
+    # รัน ID ถัดไป
+    max_id = max([o.get("sale_id", 1000) for o in orders_db], default=1000)
+    sale_id = max_id + 1
+    
+    # คำนวณเวลาประเทศไทย GMT+7
+    thaitime = (datetime.now() + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
+    
     new_order = {
         "sale_id": sale_id,
         "customer_name": customer_name,
-       "timestamp": (datetime.now() + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S"),
+        "timestamp": thaitime,
         "payment_method": payment_method,
-        "total_amount": total_amount,
+        "total_amount": round(total_amount, 2),
         "status": "Paid",
         "items": processed_items
     }
+    
     orders_db.insert(0, new_order)
+    save_orders_data() # เซฟลง mock_orders.json ทันที
+    
     return {
         "status": "success",
         "message": "สั่งซื้อสำเร็จเรียบร้อยแล้ว",
         "sale_id": sale_id,
-        "total_amount": total_amount
+        "total_amount": round(total_amount, 2)
     }
 
 # --- PRODUCTS MANAGEMENT ---
@@ -315,41 +338,6 @@ def create_product(
     products_db.append(new_prod)
     return {"status": "success", "product": new_prod}
 
-@app.put("/api/v1/admin/products/{product_id}")
-def update_product(
-    product_id: int,
-    product_name: str = Form(...),
-    cost_price: float = Form(...),
-    selling_price: float = Form(...),
-    stock_quantity: int = Form(...),
-    lead_time_days: int = Form(3),
-    safety_stock: int = Form(10),
-    image_file: Optional[UploadFile] = File(None)
-):
-    prod = next((p for p in products_db if p["product_id"] == product_id), None)
-    if not prod:
-        raise HTTPException(status_code=404, detail="Product not found")
-        
-    prod["product_name"] = product_name
-    prod["cost_price"] = cost_price
-    prod["selling_price"] = selling_price
-    prod["stock_quantity"] = stock_quantity
-    prod["lead_time_days"] = lead_time_days
-    prod["safety_stock"] = safety_stock
-    if image_file:
-        os.makedirs("static/uploads", exist_ok=True)
-        file_path = f"static/uploads/{product_id}_{image_file.filename}"
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(image_file.file, buffer)
-        prod["image_url"] = f"/uploads/{product_id}_{image_file.filename}"
-    return {"status": "success", "product": prod}
-
-@app.delete("/api/v1/admin/products/{product_id}")
-def delete_product(product_id: int):
-    global products_db
-    products_db = [p for p in products_db if p["product_id"] != product_id]
-    return {"status": "success"}
-
 # --- DASHBOARD & ANALYTICS ---
 @app.get("/api/v1/admin/dashboard-summary")
 def get_dashboard_summary(period: str = "all"):
@@ -379,9 +367,9 @@ def get_dashboard_summary(period: str = "all"):
     total_profit = total_revenue - total_cost
     low_stock_count = len([p for p in products_db if p["stock_quantity"] < 20])
     return {
-        "total_revenue": total_revenue,
-        "total_cost": total_cost,
-        "total_profit": total_profit,
+        "total_revenue": round(total_revenue, 2),
+        "total_cost": round(total_cost, 2),
+        "total_profit": round(total_profit, 2),
         "total_orders": total_orders,
         "low_stock_count": low_stock_count
     }
@@ -396,6 +384,7 @@ def update_order_status(sale_id: int, status_update: OrderStatusUpdate):
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     order["status"] = status_update.status
+    save_orders_data()
     return {"status": "success", "order": order}
 
 @app.get("/api/v1/analytics/peak-hours")
@@ -414,14 +403,11 @@ def get_peak_hours():
                 h = dt.hour
                 slot_label = f"{h:02d}:00 - {h+1:02d}:00"
                 amount = float(order.get("total_amount", 0.0))
-                
                 if slot_label in hours_map:
                     hours_map[slot_label] += amount
-                else:
-                    hours_map[slot_label] = amount
             except Exception:
                 pass
-    result = [{"hour": hour_label, "total_revenue": rev} for hour_label, rev in hours_map.items() if rev > 0 or hour_label in ["08:00 - 09:00", "09:00 - 10:00", "10:00 - 11:00", "11:00 - 12:00", "12:00 - 13:00", "18:00 - 19:00", "19:00 - 20:00"]]
+    result = [{"hour": hour_label, "total_revenue": round(rev, 2)} for hour_label, rev in hours_map.items()]
     return result
 
 @app.get("/api/v1/analytics/abc-analysis")
@@ -433,21 +419,14 @@ def get_abc_analysis():
                 p_name = item.get("product_name", "สินค้าทั่วไป")
                 subtotal = float(item.get("subtotal", 0.0))
                 summary[p_name] += subtotal
-    result = [{"product_name": name, "revenue": rev} for name, rev in summary.items()]
-    if not result:
-        result = [{"product_name": "ยังไม่มีข้อมูลการขาย", "revenue": 0.0}]
-    return result
+    result = [{"product_name": name, "revenue": round(rev, 2)} for name, rev in summary.items()]
+    return result or [{"product_name": "ยังไม่มีข้อมูล", "revenue": 0.0}]
 
-# =================================================================
-# 🚀 REAL-DATA ANALYTICS (คำนวณจากประวัติยอดขายจริง 100%)
-# =================================================================
-
-# --- 1. REAL-DATA MARKET BASKET ANALYSIS ---
+# --- REAL-DATA ANALYTICS ---
 @app.get("/api/v1/analytics/market-basket")
-def get_market_basket(min_support: float = 0.01, min_confidence: float = 0.01):
+def get_market_basket(min_support: float = 0.001, min_confidence: float = 0.001):
     valid_orders = [o for o in orders_db if o.get("status") in ["Paid", "Completed"]]
     total_orders = len(valid_orders)
-    
     if total_orders == 0:
         return {"status": "success", "rules": []}
 
@@ -466,7 +445,6 @@ def get_market_basket(min_support: float = 0.01, min_confidence: float = 0.01):
         support = pair_count / total_orders
         if support < min_support:
             continue
-            
         conf1 = pair_count / item_counts[item1]
         prob_item2 = item_counts[item2] / total_orders
         lift1 = conf1 / prob_item2 if prob_item2 > 0 else 1.0
@@ -475,21 +453,17 @@ def get_market_basket(min_support: float = 0.01, min_confidence: float = 0.01):
             rules.append({
                 "antecedents": [item1],
                 "consequents": [item2],
-                "support": round(support, 2),
-                "confidence": round(conf1, 2),
+                "support": round(support, 3),
+                "confidence": round(conf1, 3),
                 "lift": round(lift1, 2)
             })
 
     rules = sorted(rules, key=lambda x: x["lift"], reverse=True)
     return {"status": "success", "rules": rules}
 
-
-# --- 2. REAL-DATA REORDER POINT (ROP) ANALYSIS ---
 @app.get("/api/v1/analytics/reorder-points")
 def get_reorder_points():
     valid_orders = [o for o in orders_db if o.get("status") in ["Paid", "Completed"]]
-    
-    # คำนวณยอดขายรวมแยกตามสินค้าจากประวัติสั่งซื้อจริง
     product_sales_qty = defaultdict(int)
     for order in valid_orders:
         for item in order.get("items", []):
@@ -499,14 +473,11 @@ def get_reorder_points():
                 product_sales_qty[p_name] += qty
 
     results = []
-    days_evaluated = 30  # คำนวณยอดขายเฉลี่ยย้อนหลัง 30 วัน
-    
+    days_evaluated = 90
     for p in products_db:
         p_name = p["product_name"]
         total_sold = product_sales_qty.get(p_name, 0)
-        
-        # คำนวณ Daily Usage จริงจาก DB (หากเพิ่งเริ่มระบบ ให้ค่าขั้นต่ำ = 1.0 ชิ้น/วัน)
-        daily_usage = round(max(1.0, total_sold / days_evaluated), 1)
+        daily_usage = round(max(0.5, total_sold / days_evaluated), 1)
         lead_time = p.get("lead_time_days", 3)
         safety = p.get("safety_stock", 10)
         stock = p.get("stock_quantity", 0)
@@ -526,21 +497,16 @@ def get_reorder_points():
         })
     return {"status": "success", "reorder_points": results}
 
-
-# --- 3. REAL-DATA RFM ANALYSIS ---
-# --- 3. REAL-DATA RFM ANALYSIS (ปรับเกรดเงื่อนไขให้สมจริงขึ้น) ---
 @app.get("/api/v1/analytics/rfm")
 def get_rfm_analysis():
     now = datetime.now() + timedelta(hours=7)
     valid_orders = [o for o in orders_db if o.get("status") in ["Paid", "Completed"]]
-    
     customer_stats = defaultdict(lambda: {"last_date": None, "frequency": 0, "monetary": 0.0})
     
     for order in valid_orders:
         c_name = order.get("customer_name") or "ลูกค้าทั่วไป"
         amount = float(order.get("total_amount", 0.0))
         ts_str = order.get("timestamp")
-        
         try:
             dt = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
         except Exception:
@@ -558,17 +524,15 @@ def get_rfm_analysis():
         f = stats["frequency"]
         m = stats["monetary"]
         
-        # ให้คะแนน R-F-M
-        r_score = 5 if recency_days <= 3 else (4 if recency_days <= 7 else (3 if recency_days <= 14 else (2 if recency_days <= 30 else 1)))
-        f_score = 5 if f >= 5 else (4 if f >= 3 else (3 if f >= 2 else 1))
-        m_score = 5 if m >= 1000 else (4 if m >= 500 else (3 if m >= 300 else 1))
+        r_score = 5 if recency_days <= 7 else (4 if recency_days <= 15 else (3 if recency_days <= 30 else (2 if recency_days <= 60 else 1)))
+        f_score = 5 if f >= 50 else (4 if f >= 20 else (3 if f >= 10 else (2 if f >= 2 else 1)))
+        m_score = 5 if m >= 3000 else (4 if m >= 1500 else (3 if m >= 500 else (2 if m >= 200 else 1)))
         
-        # ปรับกลุ่ม Segment ให้ยืดหยุ่นขึ้นตามพฤติกรรมจริง
         if f_score >= 4 or m_score >= 4:
             segment = "Champions (ลูกค้า VIP)"
         elif f_score >= 2 or m_score >= 3:
             segment = "Loyal Customers (ลูกค้าประจำ)"
-        elif recency_days > 14:
+        elif recency_days > 45:
             segment = "At Risk (เสี่ยงเลิกซื้อ)"
         elif f == 1:
             segment = "New Customer (ลูกค้าใหม่)"
@@ -579,14 +543,14 @@ def get_rfm_analysis():
             "customer_name": c_name,
             "recency_days": recency_days,
             "frequency": f,
-            "monetary": m,
+            "monetary": round(m, 2),
             "scores": f"R:{r_score} F:{f_score} M:{m_score}",
             "segment": segment
         })
         
     return {"status": "success", "rfm_data": rfm_results}
 
-# --- PROMOTIONS API ENDPOINTS ---
+# --- PROMOTIONS ---
 @app.get("/api/v1/admin/promotions")
 def get_promotions():
     return promotions_db
@@ -623,7 +587,7 @@ def delete_promotion(promo_id: int):
     return {"status": "success"}
 
 # ----------------------------------------------------
-# 6. Static Files Mount (วางไว้ล่างสุด)
+# 6. Static Files Mount
 # ----------------------------------------------------
 if not os.path.exists("static"):
     os.makedirs("static")
