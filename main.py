@@ -264,7 +264,7 @@ async def create_order(request: Request):
     new_order = {
         "sale_id": sale_id,
         "customer_name": customer_name,
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+       "timestamp": (datetime.now() + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S"),
         "payment_method": payment_method,
         "total_amount": total_amount,
         "status": "Paid",
@@ -353,7 +353,7 @@ def delete_product(product_id: int):
 # --- DASHBOARD & ANALYTICS ---
 @app.get("/api/v1/admin/dashboard-summary")
 def get_dashboard_summary(period: str = "all"):
-    now = datetime.now()
+    now = datetime.now() + timedelta(hours=7)
     valid_orders = []
     for o in orders_db:
         if o.get("status") in ["Paid", "Completed"]:
@@ -531,7 +531,7 @@ def get_reorder_points():
 # --- 3. REAL-DATA RFM ANALYSIS (ปรับเกรดเงื่อนไขให้สมจริงขึ้น) ---
 @app.get("/api/v1/analytics/rfm")
 def get_rfm_analysis():
-    now = datetime.now()
+    now = datetime.now() + timedelta(hours=7)
     valid_orders = [o for o in orders_db if o.get("status") in ["Paid", "Completed"]]
     
     customer_stats = defaultdict(lambda: {"last_date": None, "frequency": 0, "monetary": 0.0})
