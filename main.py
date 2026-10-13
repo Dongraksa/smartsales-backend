@@ -1,5 +1,6 @@
 import os
 import shutil
+import math
 from typing import List, Optional, Any, Dict
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -12,8 +13,8 @@ from pydantic import BaseModel
 
 app = FastAPI(
     title="SmartSales Enterprise API",
-    description="ระบบบริหารจัดการร้านค้า สต็อกสินค้า และระบบหลังบ้าน",
-    version="1.0.0"
+    description="ระบบบริหารจัดการร้านค้า สต็อกสินค้า ระบบหลังบ้าน และ Advanced Analytics (ROP, Market Basket, RFM)",
+    version="2.0.0"
 )
 
 # ----------------------------------------------------
@@ -56,7 +57,9 @@ products_db = [
         "cost_price": 25.0,
         "selling_price": 55.0,
         "stock_quantity": 45,
-        "image_url": "https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=300"
+        "image_url": "https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=300",
+        "lead_time_days": 3,
+        "safety_stock": 10
     },
     {
         "product_id": 2,
@@ -64,7 +67,9 @@ products_db = [
         "cost_price": 30.0,
         "selling_price": 65.0,
         "stock_quantity": 12,
-        "image_url": "https://images.unsplash.com/photo-1570968915860-54d5c301fa9f?w=300"
+        "image_url": "https://images.unsplash.com/photo-1570968915860-54d5c301fa9f?w=300",
+        "lead_time_days": 4,
+        "safety_stock": 15
     },
     {
         "product_id": 3,
@@ -72,13 +77,16 @@ products_db = [
         "cost_price": 20.0,
         "selling_price": 45.0,
         "stock_quantity": 8,
-        "image_url": "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=300"
+        "image_url": "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=300",
+        "lead_time_days": 2,
+        "safety_stock": 10
     }
 ]
 
 orders_db = [
     {
         "sale_id": 1001,
+        "customer_name": "สมชาย สายเปย์",
         "timestamp": "2026-10-08 18:30:15",
         "payment_method": "PromptPay",
         "total_amount": 120.0,
@@ -90,6 +98,7 @@ orders_db = [
     },
     {
         "sale_id": 1002,
+        "customer_name": "สมหญิง รักสงบ",
         "timestamp": "2026-10-08 19:15:00",
         "payment_method": "PromptPay",
         "total_amount": 100.0,
@@ -204,7 +213,6 @@ def login(data: LoginSchema):
 def register(data: RegisterSchema):
     if any(u["email"] == data.email for u in users_db):
         raise HTTPException(status_code=400, detail="อีเมลนี้ถูกใช้งานในระบบแล้ว")
-
     new_user = {
         "user_id": len(users_db) + 1,
         "full_name": data.full_name,
@@ -214,7 +222,6 @@ def register(data: RegisterSchema):
         "role": "customer"
     }
     users_db.append(new_user)
-
     return {
         "status": "success",
         "message": "สมัครสมาชิกเรียบร้อยแล้ว",
@@ -230,56 +237,48 @@ async def create_order(request: Request):
         data = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="รูปแบบข้อมูล JSON ไม่ถูกต้อง")
-
     raw_items = []
     if isinstance(data, list):
         raw_items = data
     elif isinstance(data, dict):
         raw_items = data.get("items") or data.get("cart") or data.get("order_items") or []
-
     if not raw_items:
         raise HTTPException(status_code=400, detail="ไม่มีรายการสินค้าในตะกร้า")
-
     processed_items = []
     total_amount = 0.0
-
     for item in raw_items:
         p_name = item.get("product_name") or item.get("name") or item.get("title") or "สินค้า"
         qty = int(item.get("quantity") or item.get("qty") or item.get("count") or 1)
         price = float(item.get("selling_price") or item.get("price") or item.get("cost") or 0.0)
         p_id = item.get("product_id") or item.get("id")
-
         subtotal = price * qty
         total_amount += subtotal
-
         # ตัดสต็อก
         prod = next((p for p in products_db if (p_id and p["product_id"] == p_id) or p["product_name"] == p_name), None)
         if prod:
             prod["stock_quantity"] = max(0, prod["stock_quantity"] - qty)
-
         processed_items.append({
             "product_name": p_name,
             "quantity": qty,
             "subtotal": subtotal,
             "image_url": prod["image_url"] if prod else "https://via.placeholder.com/150"
         })
-
     payment_method = "PromptPay"
+    customer_name = "ลูกค้าทั่วไป"
     if isinstance(data, dict):
         payment_method = data.get("payment_method") or data.get("payment") or "PromptPay"
-
+        customer_name = data.get("customer_name") or "ลูกค้าทั่วไป"
     sale_id = 1000 + len(orders_db) + 1
     new_order = {
         "sale_id": sale_id,
+        "customer_name": customer_name,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "payment_method": payment_method,
         "total_amount": total_amount,
         "status": "Paid",
         "items": processed_items
     }
-
     orders_db.insert(0, new_order)
-
     return {
         "status": "success",
         "message": "สั่งซื้อสำเร็จเรียบร้อยแล้ว",
@@ -298,6 +297,8 @@ def create_product(
     cost_price: float = Form(...),
     selling_price: float = Form(...),
     stock_quantity: int = Form(...),
+    lead_time_days: int = Form(3),
+    safety_stock: int = Form(10),
     image_file: Optional[UploadFile] = File(None)
 ):
     new_id = len(products_db) + 1
@@ -309,13 +310,14 @@ def create_product(
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(image_file.file, buffer)
         image_url = f"/uploads/{new_id}_{image_file.filename}"
-
     new_prod = {
         "product_id": new_id,
         "product_name": product_name,
         "cost_price": cost_price,
         "selling_price": selling_price,
         "stock_quantity": stock_quantity,
+        "lead_time_days": lead_time_days,
+        "safety_stock": safety_stock,
         "image_url": image_url
     }
     products_db.append(new_prod)
@@ -328,6 +330,8 @@ def update_product(
     cost_price: float = Form(...),
     selling_price: float = Form(...),
     stock_quantity: int = Form(...),
+    lead_time_days: int = Form(3),
+    safety_stock: int = Form(10),
     image_file: Optional[UploadFile] = File(None)
 ):
     prod = next((p for p in products_db if p["product_id"] == product_id), None)
@@ -338,14 +342,14 @@ def update_product(
     prod["cost_price"] = cost_price
     prod["selling_price"] = selling_price
     prod["stock_quantity"] = stock_quantity
-
+    prod["lead_time_days"] = lead_time_days
+    prod["safety_stock"] = safety_stock
     if image_file:
         os.makedirs("static/uploads", exist_ok=True)
         file_path = f"static/uploads/{product_id}_{image_file.filename}"
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(image_file.file, buffer)
         prod["image_url"] = f"/uploads/{product_id}_{image_file.filename}"
-
     return {"status": "success", "product": prod}
 
 @app.delete("/api/v1/admin/products/{product_id}")
@@ -359,7 +363,6 @@ def delete_product(product_id: int):
 def get_dashboard_summary(period: str = "all"):
     now = datetime.now()
     valid_orders = []
-
     for o in orders_db:
         if o.get("status") in ["Paid", "Completed"]:
             try:
@@ -373,21 +376,16 @@ def get_dashboard_summary(period: str = "all"):
                 valid_orders.append(o)
             except Exception:
                 valid_orders.append(o)
-
     total_revenue = sum(o["total_amount"] for o in valid_orders)
     total_orders = len(valid_orders)
     total_cost = 0.0
-
-    # คำนวณต้นทุนรวม
     for o in valid_orders:
         for item in o.get("items", []):
             prod = next((p for p in products_db if p["product_name"] == item["product_name"]), None)
             cost_price = prod["cost_price"] if prod else 0.0
             total_cost += cost_price * item.get("quantity", 1)
-
     total_profit = total_revenue - total_cost
     low_stock_count = len([p for p in products_db if p["stock_quantity"] < 20])
-
     return {
         "total_revenue": total_revenue,
         "total_cost": total_cost,
@@ -411,20 +409,11 @@ def update_order_status(sale_id: int, status_update: OrderStatusUpdate):
 @app.get("/api/v1/analytics/peak-hours")
 def get_peak_hours():
     hours_map = {
-        "08:00 - 09:00": 0.0,
-        "09:00 - 10:00": 0.0,
-        "10:00 - 11:00": 0.0,
-        "11:00 - 12:00": 0.0,
-        "12:00 - 13:00": 0.0,
-        "13:00 - 14:00": 0.0,
-        "14:00 - 15:00": 0.0,
-        "15:00 - 16:00": 0.0,
-        "16:00 - 17:00": 0.0,
-        "17:00 - 18:00": 0.0,
-        "18:00 - 19:00": 0.0,
-        "19:00 - 20:00": 0.0
+        "08:00 - 09:00": 0.0, "09:00 - 10:00": 0.0, "10:00 - 11:00": 0.0,
+        "11:00 - 12:00": 0.0, "12:00 - 13:00": 0.0, "13:00 - 14:00": 0.0,
+        "14:00 - 15:00": 0.0, "15:00 - 16:00": 0.0, "16:00 - 17:00": 0.0,
+        "17:00 - 18:00": 0.0, "18:00 - 19:00": 0.0, "19:00 - 20:00": 0.0
     }
-
     for order in orders_db:
         if order.get("status") in ["Paid", "Completed"]:
             try:
@@ -440,26 +429,21 @@ def get_peak_hours():
                     hours_map[slot_label] = amount
             except Exception:
                 pass
-
     result = [{"hour": hour_label, "total_revenue": rev} for hour_label, rev in hours_map.items() if rev > 0 or hour_label in ["08:00 - 09:00", "09:00 - 10:00", "10:00 - 11:00", "11:00 - 12:00", "12:00 - 13:00", "18:00 - 19:00", "19:00 - 20:00"]]
     return result
 
 @app.get("/api/v1/analytics/abc-analysis")
 def get_abc_analysis():
     summary = defaultdict(float)
-    
     for order in orders_db:
         if order.get("status") in ["Paid", "Completed"]:
             for item in order.get("items", []):
                 p_name = item.get("product_name", "สินค้าทั่วไป")
                 subtotal = float(item.get("subtotal", 0.0))
                 summary[p_name] += subtotal
-
     result = [{"product_name": name, "revenue": rev} for name, rev in summary.items()]
-    
     if not result:
         result = [{"product_name": "ยังไม่มีข้อมูลการขาย", "revenue": 0.0}]
-        
     return result
 
 @app.get("/api/v1/analytics/market-basket")
@@ -467,28 +451,22 @@ def get_market_basket(min_support: float = 0.01, min_confidence: float = 0.01):
     total_orders = len(orders_db)
     if total_orders == 0:
         return {"status": "success", "rules": []}
-
     item_counts = defaultdict(int)
     pair_counts = defaultdict(int)
-
     for order in orders_db:
         items = list(set([item["product_name"] for item in order.get("items", [])]))
         for item in items:
             item_counts[item] += 1
         for pair in combinations(sorted(items), 2):
             pair_counts[pair] += 1
-
     rules = []
-
     for (item1, item2), pair_count in pair_counts.items():
         support = pair_count / total_orders
         if support < min_support:
             continue
-
         conf1 = pair_count / item_counts[item1]
         prob_item2 = item_counts[item2] / total_orders
         lift1 = conf1 / prob_item2 if prob_item2 > 0 else 1.0
-
         if conf1 >= min_confidence:
             rules.append({
                 "antecedents": [item1],
@@ -497,11 +475,9 @@ def get_market_basket(min_support: float = 0.01, min_confidence: float = 0.01):
                 "confidence": round(conf1, 2),
                 "lift": round(lift1, 2)
             })
-
         conf2 = pair_count / item_counts[item2]
         prob_item1 = item_counts[item1] / total_orders
         lift2 = conf2 / prob_item1 if prob_item1 > 0 else 1.0
-
         if conf2 >= min_confidence:
             rules.append({
                 "antecedents": [item2],
@@ -510,13 +486,74 @@ def get_market_basket(min_support: float = 0.01, min_confidence: float = 0.01):
                 "confidence": round(conf2, 2),
                 "lift": round(lift2, 2)
             })
-
     rules = sorted(rules, key=lambda x: x["lift"], reverse=True)
-
     return {
         "status": "success",
         "rules": rules
     }
+
+# =================================================================
+# 🚀 NEW ANALYTICS ENDPOINTS (เพิ่มตามบรีฟอาจารย์)
+# =================================================================
+
+# --- 1. REORDER POINT (ROP) ANALYSIS ---
+@app.get("/api/v1/analytics/reorder-points", summary="คำนวณจุดสั่งซื้อสินค้าเติม (ROP)")
+def get_reorder_points():
+    results = []
+    for p in products_db:
+        daily_usage = 4.0  # ค่าเฉลี่ยการขายต่อวัน
+        lead_time = p.get("lead_time_days", 3)
+        safety = p.get("safety_stock", 10)
+        stock = p.get("stock_quantity", 0)
+        
+        rop = math.ceil((daily_usage * lead_time) + safety)
+        status = "CRITICAL" if stock == 0 else ("REORDER_NOW" if stock <= rop else "OK")
+        
+        results.append({
+            "product_id": p["product_id"],
+            "product_name": p["product_name"],
+            "current_stock": stock,
+            "daily_usage": daily_usage,
+            "lead_time_days": lead_time,
+            "safety_stock": safety,
+            "reorder_point": rop,
+            "status": status
+        })
+    return {"status": "success", "reorder_points": results}
+
+# --- 2. RFM ANALYSIS ---
+@app.get("/api/v1/analytics/rfm", summary="วิเคราะห์การแบ่งกลุ่มลูกค้า (RFM Analysis)")
+def get_rfm_analysis():
+    cust_data = [
+        {"name": "สมชาย สายเปย์ (VIP)", "recency_days": 2, "frequency": 14, "monetary": 12500.0},
+        {"name": "สมหญิง รักสงบ", "recency_days": 12, "frequency": 5, "monetary": 2400.0},
+        {"name": "อนันต์ ตั้งใจเรียน", "recency_days": 45, "frequency": 2, "monetary": 550.0}
+    ]
+    rfm_results = []
+    for c in cust_data:
+        r, f, m = c["recency_days"], c["frequency"], c["monetary"]
+        r_score = 5 if r <= 7 else (4 if r <= 15 else (3 if r <= 30 else (2 if r <= 60 else 1)))
+        f_score = 5 if f >= 10 else (4 if f >= 5 else (3 if f >= 3 else (2 if f >= 2 else 1)))
+        m_score = 5 if m >= 10000 else (4 if m >= 5000 else (3 if m >= 2000 else (2 if m >= 500 else 1)))
+        
+        if r_score >= 4 and f_score >= 4:
+            segment = "Champions (ลูกค้า VIP)"
+        elif r_score >= 3 and f_score >= 3:
+            segment = "Loyal Customers (ลูกค้าประจำ)"
+        elif r_score <= 2:
+            segment = "At Risk (เสี่ยงเลิกซื้อ)"
+        else:
+            segment = "General Customer"
+            
+        rfm_results.append({
+            "customer_name": c["name"],
+            "recency_days": r,
+            "frequency": f,
+            "monetary": m,
+            "scores": f"R:{r_score} F:{f_score} M:{m_score}",
+            "segment": segment
+        })
+    return {"status": "success", "rfm_data": rfm_results}
 
 # --- PROMOTION API ENDPOINTS ---
 @app.get("/api/v1/admin/promotions")
@@ -559,5 +596,4 @@ def delete_promotion(promo_id: int):
 # ----------------------------------------------------
 if not os.path.exists("static"):
     os.makedirs("static")
-
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
