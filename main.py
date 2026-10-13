@@ -1,6 +1,7 @@
 import os
 import shutil
 import math
+import time
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from typing import List, Optional, Any, Dict
@@ -16,7 +17,7 @@ from pydantic import BaseModel
 app = FastAPI(
     title="SmartSales Enterprise API",
     description="ระบบบริหารจัดการร้านค้า สต็อกสินค้า ระบบหลังบ้าน และ Real-Data Analytics (ROP, Market Basket, RFM)",
-    version="2.3.0"
+    version="2.4.0"
 )
 
 # ----------------------------------------------------
@@ -31,13 +32,17 @@ app.add_middleware(
 )
 
 # ----------------------------------------------------
-# 2. ฟังก์ชันจัดการ PostgreSQL Database (พร้อมระบบป้องกันค้าง)
+# 2. ฟังก์ชันจัดการ PostgreSQL Database + Simple Cache
 # ----------------------------------------------------
 DB_HOST = os.getenv("DB_HOST", "dpg-db6qm58m7kps73avm6ig-a.singapore-postgres.render.com")
 DB_NAME = os.getenv("DB_NAME", "smartsales_r99y")
 DB_USER = os.getenv("DB_USER", "smartsales_user")
 DB_PASS = os.getenv("DB_PASS", "uWGpl4U5DfZzw4jjIK8CY2G6UrFjCdQG")
 DB_PORT = os.getenv("DB_PORT", "5432")
+
+# ระบบ Cache เก็บข้อมูลออเดอร์ในแรม 15 วินาที เพื่อไม่ให้ DB ทำงานหนัก
+ORDERS_CACHE = {"timestamp": 0, "data": []}
+CACHE_TTL = 15  # วินาที
 
 def get_db_connection():
     return psycopg2.connect(
@@ -47,10 +52,15 @@ def get_db_connection():
         password=DB_PASS,
         port=DB_PORT,
         sslmode="require",
-        connect_timeout=3  # ตัดการเชื่อมต่อทันทีใน 3 วินาทีหาก DB ไม่ตอบรับ เพื่อไม่ให้เว็บค้าง
+        connect_timeout=3
     )
 
-def fetch_orders_from_db():
+def fetch_orders_from_db(force_refresh=False):
+    now = time.time()
+    # ถ้ามีข้อมูล Cache อยู่และยังไม่หมดอายุ ให้ใช้ข้อมูลเดิมทันที (เร็วปร๋อ)
+    if not force_refresh and (now - ORDERS_CACHE["timestamp"] < CACHE_TTL) and ORDERS_CACHE["data"]:
+        return ORDERS_CACHE["data"]
+
     conn = None
     try:
         conn = get_db_connection()
@@ -75,10 +85,14 @@ def fetch_orders_from_db():
         """)
         orders = cur.fetchall()
         cur.close()
+        
+        # อัปเดต Cache
+        ORDERS_CACHE["timestamp"] = now
+        ORDERS_CACHE["data"] = orders
         return orders
     except Exception as e:
         print(f"❌ Database Read Error: {e}")
-        return []
+        return ORDERS_CACHE["data"] or []
     finally:
         if conn:
             conn.close()
@@ -327,6 +341,9 @@ async def create_order(request: Request):
         conn.commit()
         cur.close()
         
+        # รีเฟรช Cache ให้ทันทีเมื่อมีออเดอร์ใหม่เข้ามา
+        fetch_orders_from_db(force_refresh=True)
+        
         return {
             "status": "success",
             "message": "สั่งซื้อสำเร็จเรียบร้อยแล้ว",
@@ -461,6 +478,7 @@ def update_order_status(sale_id: int, status_update: OrderStatusUpdate):
         cur.execute("UPDATE orders SET status = %s WHERE sale_id = %s;", (status_update.status, sale_id))
         conn.commit()
         cur.close()
+        fetch_orders_from_db(force_refresh=True)
         return {"status": "success", "sale_id": sale_id, "new_status": status_update.status}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
