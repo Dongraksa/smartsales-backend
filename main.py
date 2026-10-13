@@ -148,7 +148,71 @@ class PromotionSchema(BaseModel):
     condition_summary: str
     start_date: str
     end_date: str
+# --- AI PROMOTION RECOMMENDATIONS (จับคู่สินค้าขายดี + สินค้าขายช้า) ---
+@app.get("/api/v1/analytics/promo-recommendations")
+def get_promo_recommendations():
+    valid_orders = [o for o in orders_db if o.get("status") in ["Paid", "Completed"]]
+    
+    # 1. คำนวณยอดขายชิ้นรวมของสินค้าแต่ละชนิด
+    product_sales = defaultdict(int)
+    for order in valid_orders:
+        for item in order.get("items", []):
+            p_name = item.get("product_name")
+            qty = item.get("quantity", 1)
+            if p_name:
+                product_sales[p_name] += qty
 
+    # นำรายการสินค้าทั้งหมดมาเรียงลำดับยอดขาย
+    sorted_products = []
+    for p in products_db:
+        p_name = p["product_name"]
+        sold_qty = product_sales.get(p_name, 0)
+        sorted_products.append({
+            "product_id": p["product_id"],
+            "product_name": p_name,
+            "selling_price": p["selling_price"],
+            "sold_qty": sold_qty
+        })
+    
+    # เรียงจากขายดีสุดไปขายช้าสุด
+    sorted_products.sort(key=lambda x: x["sold_qty"], reverse=True)
+
+    recommendations = []
+    
+    if len(sorted_products) >= 2:
+        top_product = sorted_products[0]      # สินค้าขายดีอันดับ 1
+        slow_product = sorted_products[-1]    # สินค้าขายช้าที่สุด
+
+        # ข้อเสนอที่ 1: เซตจับคู่ขายดี + ขายช้า (Bundle Deal)
+        recommended_discount = round((top_product["selling_price"] + slow_product["selling_price"]) * 0.15, -1) # ลด ~15%
+        if recommended_discount < 10: recommended_discount = 10
+
+        recommendations.append({
+            "rec_id": 1,
+            "title": f"เซตกระตุ้นยอดขาย: {top_product['product_name']} + {slow_product['product_name']}",
+            "promo_type": "Bundle Deal",
+            "condition_summary": f"{top_product['product_name']} + {slow_product['product_name']}",
+            "discount_text": f"ซื้อคู่กันลด {int(recommended_discount)} บาท",
+            "reason": f"จับคู่สินค้าขายดี ({top_product['product_name']} ขายได้ {top_product['sold_qty']} ชิ้น) กับสินค้าขายช้า ({slow_product['product_name']} ขายได้ {slow_product['sold_qty']} ชิ้น) เพื่อเร่งการระบายสต็อก"
+        })
+
+    if len(sorted_products) >= 4:
+        second_top = sorted_products[1]        # สินค้าขายดีอันดับ 2
+        second_slow = sorted_products[-2]     # สินค้าขายช้าอันดับ 2
+
+        recommended_discount_2 = round((second_top["selling_price"] + second_slow["selling_price"]) * 0.10, -1)
+        if recommended_discount_2 < 10: recommended_discount_2 = 10
+
+        recommendations.append({
+            "rec_id": 2,
+            "title": f"เซ็ตจับคู่เพิ่มยอด: {second_top['product_name']} + {second_slow['product_name']}",
+            "promo_type": "Cross-Selling",
+            "condition_summary": f"{second_top['product_name']} + {second_slow['product_name']}",
+            "discount_text": f"ซื้อคู่กันลด {int(recommended_discount_2)} บาท",
+            "reason": f"ช่วยดันยอดขาย {second_slow['product_name']} (ขายได้เพียง {second_slow['sold_qty']} ชิ้น) โดยพ่วงกับ {second_top['product_name']}"
+        })
+
+    return {"status": "success", "recommendations": recommendations}
 # ----------------------------------------------------
 # 4. Page Shortcut Routes
 # ----------------------------------------------------
