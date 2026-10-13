@@ -11,10 +11,9 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- JS Libraries (ใช้ c ตัวเล็กสำหรับ chart.js) -->
+    <!-- JS Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
     <style>
         * { font-family: 'Prompt', sans-serif; }
         body { background-color: #f8fafc; color: #334155; }
@@ -38,7 +37,6 @@
             color: white;
             box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
         }
-
         .card-custom {
             border: none;
             border-radius: 20px;
@@ -58,7 +56,6 @@
             justify-content: center;
             font-size: 1.5rem;
         }
-
         /* Thai Status Badges */
         .badge-pending { background-color: #fef3c7; color: #d97706; }
         .badge-paid { background-color: #dbeafe; color: #2563eb; }
@@ -77,7 +74,6 @@
     </style>
 </head>
 <body>
-
     <div class="container-fluid">
         <div class="row">
             <!-- Sidebar Navigation -->
@@ -94,7 +90,7 @@
                         <i class="fa-solid fa-receipt me-2"></i> จัดการออเดอร์
                     </a>
                     <a class="nav-link" href="#" onclick="switchTab('products')">
-                        <i class="fa-solid fa-boxes-stacked me-2"></i> สต็อกสินค้า
+                        <i class="fa-solid fa-boxes-stacked me-2"></i> สต็อกสินค้า & ROP
                     </a>
                     <a class="nav-link" href="#" onclick="switchTab('analytics')">
                         <i class="fa-solid fa-brain me-2"></i> การวิเคราะห์การขาย
@@ -108,10 +104,8 @@
                     </a>
                 </nav>
             </div>
-
             <!-- Main Content Area -->
             <div class="col-md-9 col-lg-10 p-4">
-
                 <!-- Header Navbar -->
                 <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
                     <div>
@@ -125,7 +119,6 @@
                         </div>
                     </div>
                 </div>
-
                 <!-- TAB 1: DASHBOARD SUMMARY -->
                 <div id="tab-dashboard" class="tab-content-item">
                     <div class="row g-4 mb-4">
@@ -145,7 +138,6 @@
                                 </div>
                             </div>
                         </div>
-
                         <div class="col-md-4">
                             <div class="card-custom p-4 cursor-pointer" onclick="switchTab('orders')">
                                 <div class="d-flex justify-content-between align-items-center">
@@ -162,7 +154,6 @@
                                 </div>
                             </div>
                         </div>
-
                         <div class="col-md-4">
                             <div class="card-custom p-4 cursor-pointer" onclick="openLowStockModal()">
                                 <div class="d-flex justify-content-between align-items-center">
@@ -180,7 +171,6 @@
                             </div>
                         </div>
                     </div>
-
                     <!-- Recent Orders Table -->
                     <div class="card-custom p-4">
                         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -206,7 +196,6 @@
                         </div>
                     </div>
                 </div>
-
                 <!-- TAB 2: ORDERS MANAGEMENT -->
                 <div id="tab-orders" class="tab-content-item d-none">
                     <div class="card-custom p-4">
@@ -231,10 +220,9 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- TAB 3: PRODUCTS INVENTORY -->
+                <!-- TAB 3: PRODUCTS INVENTORY & ROP -->
                 <div id="tab-products" class="tab-content-item d-none">
-                    <div class="card-custom p-4">
+                    <div class="card-custom p-4 mb-4">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h5 class="fw-bold mb-0">รายการและสต็อกสินค้า</h5>
                             <button class="btn btn-primary rounded-pill px-3" onclick="openAddProductModal()">
@@ -260,9 +248,40 @@
                             </table>
                         </div>
                     </div>
+
+                    <!-- NEW SECTION: REORDER POINT (ROP) ANALYSIS TABLE -->
+                    <div class="card-custom p-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <h5 class="fw-bold mb-1 text-warning"><i class="fa-solid fa-boxes-stacked me-2"></i>จุดสั่งซื้อสินค้าเติม (Reorder Point - ROP)</h5>
+                                <p class="text-muted small mb-0">สูตรคำนวณ: ROP = (ยอดขายเฉลี่ย/วัน × Lead Time) + Safety Stock</p>
+                            </div>
+                            <button class="btn btn-sm btn-outline-warning rounded-pill px-3" onclick="fetchROPData()">
+                                <i class="fa-solid fa-rotate me-1"></i> รีเฟรช ROP
+                            </button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-bordered align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>ID สินค้า</th>
+                                        <th>ชื่อสินค้า</th>
+                                        <th class="text-center">สต็อกปัจจุบัน</th>
+                                        <th class="text-center">ระยะเวลารอส่ง (Lead Time)</th>
+                                        <th class="text-center">สต็อกสำรอง (Safety Stock)</th>
+                                        <th class="text-center">จุดสั่งซื้อเติม (ROP)</th>
+                                        <th class="text-center">สถานะการสั่งเติม</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rop-tbody">
+                                    <tr><td colspan="7" class="text-center py-4 text-muted">กำลังคำนวณจุด ROP...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- TAB 4: ADVANCED ANALYTICS -->
+                <!-- TAB 4: ADVANCED ANALYTICS (PEAK HOURS, ABC, MARKET BASKET, RFM) -->
                 <div id="tab-analytics" class="tab-content-item d-none">
                     <div class="row g-4 mb-4">
                         <!-- Peak Hours Chart Card -->
@@ -280,7 +299,6 @@
                                 </div>
                             </div>
                         </div>
-
                         <!-- ABC Analysis Chart Card -->
                         <div class="col-lg-6">
                             <div class="card-custom p-4 h-100 d-flex flex-column justify-content-between">
@@ -295,6 +313,30 @@
                                     <span id="abc-summary">กำลังประมวลผลการจัดกลุ่มรายได้สินค้า...</span>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- NEW SECTION: RFM CUSTOMER SEGMENTATION TABLE -->
+                    <div class="card-custom p-4 mb-4">
+                        <h5 class="fw-bold mb-1 text-primary"><i class="fa-solid fa-users-viewfinder me-2"></i>การแบ่งกลุ่มลูกค้าตามพฤติกรรม (RFM Analysis)</h5>
+                        <p class="text-muted small mb-3">จำแนกกลุ่มด้วย Recency (ซื้อล่าสุด), Frequency (ความถี่), และ Monetary (ยอดใช้จ่าย)</p>
+                        
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>ชื่อลูกค้า</th>
+                                        <th class="text-center">ซื้อล่าสุด (Recency)</th>
+                                        <th class="text-center">ความถี่รวม (Frequency)</th>
+                                        <th class="text-end">ยอดเงินรวม (Monetary)</th>
+                                        <th class="text-center">คะแนน R-F-M</th>
+                                        <th class="text-center">กลุ่มลูกค้า (Segment)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rfm-tbody">
+                                    <tr><td colspan="6" class="text-center py-4 text-muted">กำลังประมวลผลวิเคราะห์กลุ่มลูกค้า...</td></tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 
@@ -322,8 +364,7 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- TAB 5: PROMOTIONS MANAGEMENT (ใหม่) -->
+                <!-- TAB 5: PROMOTIONS MANAGEMENT -->
                 <div id="tab-promotions" class="tab-content-item d-none">
                     <!-- Summary Badges -->
                     <div class="row g-4 mb-4">
@@ -340,7 +381,6 @@
                                 </div>
                             </div>
                         </div>
-
                         <div class="col-md-4">
                             <div class="card-custom p-4">
                                 <div class="d-flex justify-content-between align-items-center">
@@ -354,7 +394,6 @@
                                 </div>
                             </div>
                         </div>
-
                         <div class="col-md-4">
                             <div class="card-custom p-4">
                                 <div class="d-flex justify-content-between align-items-center">
@@ -369,7 +408,6 @@
                             </div>
                         </div>
                     </div>
-
                     <!-- Main Promotions Table -->
                     <div class="card-custom p-4">
                         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -381,7 +419,6 @@
                                 <i class="fa-solid fa-plus me-1"></i> สร้างโปรโมชันใหม่
                             </button>
                         </div>
-
                         <div class="table-responsive">
                             <table class="table table-hover align-middle">
                                 <thead class="table-light">
@@ -403,12 +440,11 @@
                         </div>
                     </div>
                 </div>
-
             </div>
         </div>
     </div>
 
-    <!-- MODAL: รายการสินค้าสต็อกต่ำ -->
+    <!-- MODALS SECTION -->
     <div class="modal fade" id="lowStockModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content rounded-4 border-0 p-3">
@@ -431,7 +467,6 @@
         </div>
     </div>
 
-    <!-- MODAL: สร้างโปรโมชันใหม่ -->
     <div class="modal fade" id="promoModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content rounded-4 border-0 p-2">
@@ -454,17 +489,14 @@
                                 <option value="discount_code">คูปอง / โค้ดส่วนลด (Coupon)</option>
                             </select>
                         </div>
-
                         <div class="mb-3">
                             <label class="form-label small fw-semibold">เงื่อนไขสินค้า / ข้อกำหนด</label>
                             <input type="text" id="promo-condition" class="form-control rounded-3" placeholder="เช่น อเมริกาโน่เย็น + ครัวซองต์" required>
                         </div>
-
                         <div class="mb-3">
                             <label class="form-label small fw-semibold">ข้อความส่วนลดที่แสดงให้ลูกค้าเห็น</label>
                             <input type="text" id="promo-discount-text" class="form-control rounded-3" placeholder="เช่น ซื้อคู่กันลดทันที 15 บาท" required>
                         </div>
-
                         <div class="row g-2 mb-3">
                             <div class="col-6">
                                 <label class="form-label small fw-semibold">วันที่เริ่มต้น</label>
@@ -475,7 +507,6 @@
                                 <input type="date" id="promo-end" class="form-control rounded-3" required>
                             </div>
                         </div>
-
                         <button type="submit" class="btn btn-primary w-100 py-2 rounded-3 fw-bold mt-2">
                             <i class="fa-solid fa-circle-check me-1"></i> บันทึกและเปิดใช้งานแคมเปญ
                         </button>
@@ -485,7 +516,6 @@
         </div>
     </div>
 
-    <!-- Modals อื่นๆ -->
     <div class="modal fade" id="revenueModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content rounded-4 border-0 p-3">
@@ -500,7 +530,6 @@
                         <button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="filterPeriod('weekly', this)">รายสัปดาห์ (7 วัน)</button>
                         <button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="filterPeriod('monthly', this)">รายเดือน (30 วัน)</button>
                     </div>
-
                     <div class="row g-3 text-center mb-3">
                         <div class="col-md-4">
                             <div class="p-3 bg-light rounded-4 border">
@@ -547,7 +576,6 @@
                             <button class="btn btn-sm btn-primary rounded-pill px-3" id="modal-save-status-btn">บันทึกสถานะ</button>
                         </div>
                     </div>
-
                     <div id="modal-order-items-list" class="mb-3" style="max-height: 350px; overflow-y: auto;"></div>
                     
                     <div class="d-flex justify-content-between align-items-center fw-bold fs-5 pt-3 border-top">
@@ -611,7 +639,6 @@
         let currentProducts = [];
         let isUserEditingStatus = false;
         let selectedPeriod = 'all';
-
         const statusTH = {
             'Paid': 'ชำระเงินแล้ว',
             'Completed': 'เสร็จสิ้น',
@@ -623,40 +650,33 @@
         document.addEventListener("DOMContentLoaded", function() {
             const adminName = sessionStorage.getItem('user_name') || 'ผู้ดูแลระบบ';
             document.getElementById('admin-user-display').innerText = adminName;
-
             if (typeof bootstrap !== 'undefined') {
                 const elProd = document.getElementById('productModal');
                 const elOrder = document.getElementById('orderDetailsModal');
                 const elRev = document.getElementById('revenueModal');
                 const elLow = document.getElementById('lowStockModal');
                 const elPromo = document.getElementById('promoModal');
-
                 if (elProd) productModalObj = new bootstrap.Modal(elProd);
                 if (elOrder) orderDetailsModalObj = new bootstrap.Modal(elOrder);
                 if (elRev) revenueModalObj = new bootstrap.Modal(elRev);
                 if (elLow) lowStockModalObj = new bootstrap.Modal(elLow);
                 if (elPromo) promoModalObj = new bootstrap.Modal(elPromo);
             }
-
             document.getElementById('modal-save-status-btn').addEventListener('click', async function() {
                 if (!activeModalSaleId) return;
                 const newStatus = document.getElementById('modal-order-status-select').value;
                 await changeOrderStatus(activeModalSaleId, newStatus);
                 if (orderDetailsModalObj) orderDetailsModalObj.hide();
             });
-
-            // กำหนดวันที่ปัจจุบันในฟอร์มโปรโมชัน
             const todayStr = new Date().toISOString().split('T')[0];
             document.getElementById('promo-start').value = todayStr;
-
             loadAllAdminData();
-            setInterval(loadAllAdminData, 2000);
+            setInterval(loadAllAdminData, 3000);
         });
 
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content-item').forEach(el => el.classList.add('d-none'));
             document.querySelectorAll('.sidebar .nav-link').forEach(el => el.classList.remove('active'));
-
             const targetTab = document.getElementById(`tab-${tabName}`);
             if (targetTab) targetTab.classList.remove('d-none');
             
@@ -666,20 +686,21 @@
             if(tabName === 'products') navLinks[2]?.classList.add('active');
             if(tabName === 'analytics') navLinks[3]?.classList.add('active');
             if(tabName === 'promotions') navLinks[4]?.classList.add('active');
-
             const titles = {
                 'dashboard': 'แดชบอร์ดผู้ดูแลระบบ',
                 'orders': 'จัดการและติดตามสถานะออเดอร์',
-                'products': 'จัดการสต็อกและรายการสินค้า',
-                'analytics': 'วิเคราะห์พฤติกรรมการขายขั้นสูง',
+                'products': 'จัดการสต็อกและระบบคำนวณ ROP',
+                'analytics': 'วิเคราะห์พฤติกรรมการขายขั้นสูง (Analytics & RFM)',
                 'promotions': 'ระบบจัดการโปรโมชันและแคมเปญ'
             };
             document.getElementById('page-title').innerText = titles[tabName] || 'SmartSales Admin';
-
             if (tabName === 'analytics') {
                 setTimeout(() => {
                     renderAnalyticsCharts();
+                    fetchRFMData();
                 }, 100);
+            } else if (tabName === 'products') {
+                fetchROPData();
             } else if (tabName === 'promotions') {
                 fetchPromotions();
             }
@@ -725,26 +746,20 @@
 
         async function fetchOrders() {
             if (isUserEditingStatus) return;
-
             try {
                 const res = await fetch('/api/v1/admin/orders');
                 if (!res.ok) return;
                 const orders = await res.json();
-
                 const dashTbody = document.getElementById('dash-recent-orders-body');
                 const fullTbody = document.getElementById('full-orders-table-body');
-
                 if (!dashTbody || !fullTbody) return;
-
                 if (!orders || orders.length === 0) {
                     dashTbody.innerHTML = '<tr><td colspan="6" class="text-center py-3 text-muted">ยังไม่มีออเดอร์ในระบบ</td></tr>';
                     fullTbody.innerHTML = '<tr><td colspan="7" class="text-center py-3 text-muted">ยังไม่มีออเดอร์ในระบบ</td></tr>';
                     return;
                 }
-
                 dashTbody.innerHTML = '';
                 fullTbody.innerHTML = '';
-
                 orders.forEach((o, idx) => {
                     const badgeClass = getBadgeClass(o.status || 'Paid');
                     const totalAmt = (o.total_amount || 0).toFixed(2);
@@ -762,7 +777,6 @@
                             </tr>
                         `;
                     }
-
                     const itemsArr = o.items || [];
                     const itemsText = itemsArr.map(i => `${i.product_name} (x${i.quantity})`).join(', ');
                     
@@ -800,14 +814,10 @@
                 
                 const tbody = document.getElementById('full-products-table-body');
                 const lowStockList = document.getElementById('low-stock-list');
-
                 if (!tbody) return;
-
                 tbody.innerHTML = '';
                 if (lowStockList) lowStockList.innerHTML = '';
-
                 let lowStockFound = false;
-
                 currentProducts.forEach(p => {
                     tbody.innerHTML += `
                         <tr>
@@ -825,7 +835,6 @@
                             </td>
                         </tr>
                     `;
-
                     if (p.stock_quantity < 20 && lowStockList) {
                         lowStockFound = true;
                         const imgUrl = p.image_url || 'https://via.placeholder.com/50';
@@ -843,35 +852,95 @@
                         `;
                     }
                 });
-
                 if (!lowStockFound && lowStockList) {
                     lowStockList.innerHTML = '<div class="text-success text-center py-4 fs-5"><i class="fa-solid fa-circle-check me-2"></i>ไม่มีสินค้าสต็อกต่ำกว่า 20 ชิ้น</div>';
                 }
             } catch (err) { console.error("Products error:", err); }
         }
 
-        // --- PROMOTIONS MANAGEMENT JS LOGIC ---
+        // --- NEW FUNCTION 1: FETCH REORDER POINT (ROP) DATA ---
+        async function fetchROPData() {
+            try {
+                const res = await fetch('/api/v1/analytics/reorder-points');
+                if (!res.ok) return;
+                const data = await res.json();
+                const tbody = document.getElementById('rop-tbody');
+                if (!tbody) return;
+                tbody.innerHTML = '';
+
+                if (data.status === 'success' && data.reorder_points.length > 0) {
+                    data.reorder_points.forEach(item => {
+                        let badge = '<span class="badge bg-success">ปกติ (Stock OK)</span>';
+                        if (item.status === 'CRITICAL') {
+                            badge = '<span class="badge bg-danger">สินค้าหมดสต็อก!</span>';
+                        } else if (item.status === 'REORDER_NOW') {
+                            badge = '<span class="badge bg-warning text-dark">ควรสั่งซื้อเติมทันที!</span>';
+                        }
+                        tbody.innerHTML += `
+                            <tr>
+                                <td>#${item.product_id}</td>
+                                <td class="fw-bold">${item.product_name}</td>
+                                <td class="text-center font-bold">${item.current_stock} ชิ้น</td>
+                                <td class="text-center">${item.lead_time_days} วัน</td>
+                                <td class="text-center">${item.safety_stock} ชิ้น</td>
+                                <td class="text-center fw-bold text-primary">${item.reorder_point} ชิ้น</td>
+                                <td class="text-center">${badge}</td>
+                            </tr>
+                        `;
+                    });
+                }
+            } catch (e) { console.error("Fetch ROP Error:", e); }
+        }
+
+        // --- NEW FUNCTION 2: FETCH RFM ANALYSIS DATA ---
+        async function fetchRFMData() {
+            try {
+                const res = await fetch('/api/v1/analytics/rfm');
+                if (!res.ok) return;
+                const data = await res.json();
+                const tbody = document.getElementById('rfm-tbody');
+                if (!tbody) return;
+                tbody.innerHTML = '';
+
+                if (data.status === 'success' && data.rfm_data.length > 0) {
+                    data.rfm_data.forEach(c => {
+                        let segBadge = '<span class="badge bg-secondary">ลูกค้าทั่วไป</span>';
+                        if (c.segment.includes("VIP")) segBadge = '<span class="badge bg-purple">Champions (VIP)</span>';
+                        else if (c.segment.includes("ประจำ")) segBadge = '<span class="badge bg-success">Loyal Customers</span>';
+                        else if (c.segment.includes("เสี่ยง")) segBadge = '<span class="badge bg-danger">At Risk</span>';
+
+                        tbody.innerHTML += `
+                            <tr>
+                                <td class="fw-bold">${c.customer_name}</td>
+                                <td class="text-center">${c.recency_days} วันที่แล้ว</td>
+                                <td class="text-center">${c.frequency} ครั้ง</td>
+                                <td class="text-end fw-bold text-success">฿${c.monetary.toLocaleString()}</td>
+                                <td class="text-center font-monospace small">${c.scores}</td>
+                                <td class="text-center">${segBadge}</td>
+                            </tr>
+                        `;
+                    });
+                }
+            } catch (e) { console.error("Fetch RFM Error:", e); }
+        }
+
+        // --- PROMOTIONS MANAGEMENT LOGIC ---
         async function fetchPromotions() {
             try {
                 const res = await fetch('/api/v1/admin/promotions');
                 if (!res.ok) return;
                 const promos = await res.json();
-
                 const tbody = document.getElementById('promotions-tbody');
                 if (!tbody) return;
-
                 tbody.innerHTML = '';
                 let activeCount = 0;
                 let totalUsed = 0;
-
                 promos.forEach(p => {
                     if (p.is_active) activeCount++;
                     totalUsed += (p.usage_count || 0);
-
                     let typeBadge = '<span class="badge bg-primary">Bundle Deal</span>';
                     if (p.promo_type === 'cross_sell') typeBadge = '<span class="badge bg-info text-dark">Cross-Selling</span>';
                     if (p.promo_type === 'discount_code') typeBadge = '<span class="badge bg-purple">Coupon Code</span>';
-
                     tbody.innerHTML += `
                         <tr>
                             <td class="fw-bold text-dark">${p.title}</td>
@@ -892,10 +961,8 @@
                         </tr>
                     `;
                 });
-
                 document.getElementById('promo-active-count').innerText = `${activeCount} แคมเปญ`;
                 document.getElementById('promo-total-used').innerText = `${totalUsed} ครั้ง`;
-
             } catch (e) { console.error("Fetch Promo Error:", e); }
         }
 
@@ -916,7 +983,6 @@
                 start_date: document.getElementById('promo-start').value,
                 end_date: document.getElementById('promo-end').value
             };
-
             try {
                 const res = await fetch('/api/v1/admin/promotions', {
                     method: 'POST',
@@ -951,16 +1017,12 @@
                 const res = await fetch('/api/v1/admin/orders');
                 const orders = await res.json();
                 const order = orders.find(o => o.sale_id === saleId);
-
                 if (!order) return;
-
                 document.getElementById('modal-order-id').innerText = '#' + order.sale_id;
                 document.getElementById('modal-order-total').innerText = (order.total_amount || 0).toFixed(2) + ' ฿';
                 document.getElementById('modal-order-status-select').value = order.status || 'Paid';
-
                 const container = document.getElementById('modal-order-items-list');
                 container.innerHTML = '';
-
                 (order.items || []).forEach(i => {
                     const imgUrl = i.image_url || 'https://via.placeholder.com/80';
                     container.innerHTML += `
@@ -976,7 +1038,6 @@
                         </div>
                     `;
                 });
-
                 if (orderDetailsModalObj) orderDetailsModalObj.show();
             } catch (e) { console.error(e); }
         }
@@ -1007,47 +1068,38 @@
         function openEditProductModal(productId) {
             const prod = currentProducts.find(p => p.product_id === productId);
             if (!prod) return;
-
             document.getElementById('prod-id').value = prod.product_id;
             document.getElementById('prod-name').value = prod.product_name;
             document.getElementById('prod-cost').value = prod.cost_price;
             document.getElementById('prod-price').value = prod.selling_price;
             document.getElementById('prod-stock').value = prod.stock_quantity;
             document.getElementById('prod-image').value = '';
-
             document.getElementById('productModalTitle').innerText = `แก้ไขสินค้า (ID: ${prod.product_id})`;
             document.getElementById('prod-submit-btn').innerText = 'อัปเดตข้อมูลสินค้า';
-
             if (productModalObj) productModalObj.show();
         }
 
         async function saveProductSubmit(e) {
             e.preventDefault();
             const prodId = document.getElementById('prod-id').value;
-
             const formData = new FormData();
             formData.append('product_name', document.getElementById('prod-name').value);
             formData.append('cost_price', document.getElementById('prod-cost').value);
             formData.append('selling_price', document.getElementById('prod-price').value);
             formData.append('stock_quantity', document.getElementById('prod-stock').value);
-
             const imgFile = document.getElementById('prod-image').files[0];
             if (imgFile) formData.append('image_file', imgFile);
-
             try {
                 let url = '/api/v1/admin/products';
                 let method = 'POST';
-
                 if (prodId) {
                     url = `/api/v1/admin/products/${prodId}`;
                     method = 'PUT';
                 }
-
                 const res = await fetch(url, {
                     method: method,
                     body: formData
                 });
-
                 if (res.ok) {
                     if (productModalObj) productModalObj.hide();
                     loadAllAdminData();
@@ -1065,7 +1117,6 @@
 
         function openRevenueModal() { if (revenueModalObj) revenueModalObj.show(); }
         function openLowStockModal() { if (lowStockModalObj) lowStockModalObj.show(); }
-
         function getBadgeClass(status) {
             switch(status) {
                 case 'Pending': return 'badge-pending';
@@ -1080,7 +1131,6 @@
         function getPromotionRecommendation(antStr, consStr, support, confidence, lift) {
             let badgeHtml = '';
             let recText = '';
-
             if (lift > 1.25 && confidence >= 0.6) {
                 badgeHtml = '<span class="badge bg-success mb-1"><i class="fa-solid fa-fire me-1"></i>แนะนำ Bundle Deal</span>';
                 recText = `จัดเซตคู่สุดคุ้ม <strong>${antStr} + ${consStr}</strong> ในราคาพิเศษ แรงหนุนสูงมาก ซื้อคู่กันแน่นอน`;
@@ -1094,14 +1144,12 @@
                 badgeHtml = '<span class="badge bg-secondary mb-1"><i class="fa-solid fa-tags me-1"></i>จัดโปรลองจับคู่</span>';
                 recText = `จัดส่วนลดทดลองคู่กันชั่วคราว เพื่อสร้างพฤติกรรมซื้อ <strong>${consStr}</strong> ตามหลัง <strong>${antStr}</strong>`;
             }
-
             return `<div>${badgeHtml}<div class="small text-muted mt-1">${recText}</div></div>`;
         }
 
         async function renderAnalyticsCharts() {
             try {
                 if (typeof Chart === 'undefined') return;
-
                 // 1. Peak Hours Analytics
                 const peakRes = await fetch('/api/v1/analytics/peak-hours');
                 if (peakRes.ok) {
@@ -1129,13 +1177,11 @@
                             }
                         });
                     }
-
                     if (peakData && peakData.length > 0) {
                         const sortedPeak = [...peakData].sort((a, b) => (b.total_revenue || 0) - (a.total_revenue || 0));
                         const topHour = sortedPeak[0];
                         const topRevenue = topHour.total_revenue || topHour.sales || 0;
                         const hourLabel = topHour.hour || topHour.time || `${topHour.hour_slot}:00`;
-
                         if (topRevenue > 0) {
                             document.getElementById('peak-hours-summary').innerHTML = 
                                 `ช่วงเวลาที่มียอดขายสูงสุดคือช่วง <strong>${hourLabel} น.</strong> มียอดขายรวม <strong>${topRevenue.toFixed(2)} บาท</strong>`;
@@ -1146,7 +1192,6 @@
                         document.getElementById('peak-hours-summary').innerText = 'ไม่พบข้อมูล Peak Hours';
                     }
                 }
-
                 // 2. ABC Analysis
                 const abcRes = await fetch('/api/v1/analytics/abc-analysis');
                 if (abcRes.ok) {
@@ -1155,7 +1200,6 @@
                     if (canvas2) {
                         const ctx2 = canvas2.getContext('2d');
                         if (abcChartInstance) abcChartInstance.destroy();
-
                         abcChartInstance = new Chart(ctx2, {
                             type: 'doughnut',
                             data: {
@@ -1171,12 +1215,10 @@
                             }
                         });
                     }
-
                     if (abcData && abcData.length > 0) {
                         const totalRevenueAll = abcData.reduce((sum, item) => sum + (item.revenue || item.total || 0), 0);
                         const topProduct = abcData[0];
                         const topRev = topProduct.revenue || topProduct.total || 0;
-
                         if (totalRevenueAll > 0 && topProduct) {
                             const percent = ((topRev / totalRevenueAll) * 100).toFixed(1);
                             document.getElementById('abc-summary').innerHTML = 
@@ -1188,7 +1230,6 @@
                         document.getElementById('abc-summary').innerText = 'ไม่พบข้อมูลจัดกลุ่มรายได้';
                     }
                 }
-
                 // 3. Market Basket Analysis
                 const mbRes = await fetch('/api/v1/analytics/market-basket');
                 if (mbRes.ok) {
@@ -1204,13 +1245,10 @@
                                 const supNum = r.support || 0;
                                 const confNum = r.confidence || 0;
                                 const liftNum = r.lift || 0;
-
                                 const sup = (supNum * 100).toFixed(1);
                                 const conf = (confNum * 100).toFixed(1);
                                 const lift = liftNum.toFixed(2);
-
                                 const promoAdvice = getPromotionRecommendation(ant, cons, supNum, confNum, liftNum);
-
                                 mbTbody.innerHTML += `
                                     <tr>
                                         <td class="fw-bold text-primary">${ant}</td>
