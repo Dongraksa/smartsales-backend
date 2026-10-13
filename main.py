@@ -13,8 +13,8 @@ from pydantic import BaseModel
 
 app = FastAPI(
     title="SmartSales Enterprise API",
-    description="ระบบบริหารจัดการร้านค้า สต็อกสินค้า ระบบหลังบ้าน และ Advanced Analytics (ROP, Market Basket, RFM)",
-    version="2.0.0"
+    description="ระบบบริหารจัดการร้านค้า สต็อกสินค้า ระบบหลังบ้าน และ Real-Data Analytics (ROP, Market Basket, RFM)",
+    version="2.1.0"
 )
 
 # ----------------------------------------------------
@@ -29,7 +29,7 @@ app.add_middleware(
 )
 
 # ----------------------------------------------------
-# 2. จำลองฐานข้อมูล (Mock Data In-Memory)
+# 2. ฐานข้อมูลเริ่มต้น (In-Memory / Dynamic Storage)
 # ----------------------------------------------------
 users_db = [
     {
@@ -99,7 +99,7 @@ orders_db = [
     {
         "sale_id": 1002,
         "customer_name": "สมหญิง รักสงบ",
-        "timestamp": "2026-10-08 19:15:00",
+        "timestamp": "2026-10-10 19:15:00",
         "payment_method": "PromptPay",
         "total_amount": 100.0,
         "status": "Paid",
@@ -121,17 +121,6 @@ promotions_db = [
         "is_active": True,
         "start_date": "2026-10-01",
         "end_date": "2026-10-31"
-    },
-    {
-        "promo_id": 2,
-        "title": "แลกซื้อส่วนลดลาเต้เย็น",
-        "promo_type": "cross_sell",
-        "discount_text": "แลกซื้อลาเต้ลด 20%",
-        "condition_summary": "เมื่อซื้อ ครัวซองต์เนยสด",
-        "usage_count": 14,
-        "is_active": True,
-        "start_date": "2026-10-05",
-        "end_date": "2026-11-05"
     }
 ]
 
@@ -253,10 +242,12 @@ async def create_order(request: Request):
         p_id = item.get("product_id") or item.get("id")
         subtotal = price * qty
         total_amount += subtotal
-        # ตัดสต็อก
+        
+        # ตัดสต็อกสินค้าในตารางสินค้าจริง
         prod = next((p for p in products_db if (p_id and p["product_id"] == p_id) or p["product_name"] == p_name), None)
         if prod:
             prod["stock_quantity"] = max(0, prod["stock_quantity"] - qty)
+            
         processed_items.append({
             "product_name": p_name,
             "quantity": qty,
@@ -268,6 +259,7 @@ async def create_order(request: Request):
     if isinstance(data, dict):
         payment_method = data.get("payment_method") or data.get("payment") or "PromptPay"
         customer_name = data.get("customer_name") or "ลูกค้าทั่วไป"
+        
     sale_id = 1000 + len(orders_db) + 1
     new_order = {
         "sale_id": sale_id,
@@ -446,27 +438,39 @@ def get_abc_analysis():
         result = [{"product_name": "ยังไม่มีข้อมูลการขาย", "revenue": 0.0}]
     return result
 
+# =================================================================
+# 🚀 REAL-DATA ANALYTICS (คำนวณจากประวัติยอดขายจริง 100%)
+# =================================================================
+
+# --- 1. REAL-DATA MARKET BASKET ANALYSIS ---
 @app.get("/api/v1/analytics/market-basket")
 def get_market_basket(min_support: float = 0.01, min_confidence: float = 0.01):
-    total_orders = len(orders_db)
+    valid_orders = [o for o in orders_db if o.get("status") in ["Paid", "Completed"]]
+    total_orders = len(valid_orders)
+    
     if total_orders == 0:
         return {"status": "success", "rules": []}
+
     item_counts = defaultdict(int)
     pair_counts = defaultdict(int)
-    for order in orders_db:
-        items = list(set([item["product_name"] for item in order.get("items", [])]))
+
+    for order in valid_orders:
+        items = list(set([item["product_name"] for item in order.get("items", []) if "product_name" in item]))
         for item in items:
             item_counts[item] += 1
         for pair in combinations(sorted(items), 2):
             pair_counts[pair] += 1
+
     rules = []
     for (item1, item2), pair_count in pair_counts.items():
         support = pair_count / total_orders
         if support < min_support:
             continue
+            
         conf1 = pair_count / item_counts[item1]
         prob_item2 = item_counts[item2] / total_orders
         lift1 = conf1 / prob_item2 if prob_item2 > 0 else 1.0
+        
         if conf1 >= min_confidence:
             rules.append({
                 "antecedents": [item1],
@@ -475,33 +479,34 @@ def get_market_basket(min_support: float = 0.01, min_confidence: float = 0.01):
                 "confidence": round(conf1, 2),
                 "lift": round(lift1, 2)
             })
-        conf2 = pair_count / item_counts[item2]
-        prob_item1 = item_counts[item1] / total_orders
-        lift2 = conf2 / prob_item1 if prob_item1 > 0 else 1.0
-        if conf2 >= min_confidence:
-            rules.append({
-                "antecedents": [item2],
-                "consequents": [item1],
-                "support": round(support, 2),
-                "confidence": round(conf2, 2),
-                "lift": round(lift2, 2)
-            })
+
     rules = sorted(rules, key=lambda x: x["lift"], reverse=True)
-    return {
-        "status": "success",
-        "rules": rules
-    }
+    return {"status": "success", "rules": rules}
 
-# =================================================================
-# 🚀 NEW ANALYTICS ENDPOINTS (เพิ่มตามบรีฟอาจารย์)
-# =================================================================
 
-# --- 1. REORDER POINT (ROP) ANALYSIS ---
-@app.get("/api/v1/analytics/reorder-points", summary="คำนวณจุดสั่งซื้อสินค้าเติม (ROP)")
+# --- 2. REAL-DATA REORDER POINT (ROP) ANALYSIS ---
+@app.get("/api/v1/analytics/reorder-points")
 def get_reorder_points():
+    valid_orders = [o for o in orders_db if o.get("status") in ["Paid", "Completed"]]
+    
+    # คำนวณยอดขายรวมแยกตามสินค้าจากประวัติสั่งซื้อจริง
+    product_sales_qty = defaultdict(int)
+    for order in valid_orders:
+        for item in order.get("items", []):
+            p_name = item.get("product_name")
+            qty = item.get("quantity", 1)
+            if p_name:
+                product_sales_qty[p_name] += qty
+
     results = []
+    days_evaluated = 30  # คำนวณยอดขายเฉลี่ยย้อนหลัง 30 วัน
+    
     for p in products_db:
-        daily_usage = 4.0  # ค่าเฉลี่ยการขายต่อวัน
+        p_name = p["product_name"]
+        total_sold = product_sales_qty.get(p_name, 0)
+        
+        # คำนวณ Daily Usage จริงจาก DB (หากเพิ่งเริ่มระบบ ให้ค่าขั้นต่ำ = 1.0 ชิ้น/วัน)
+        daily_usage = round(max(1.0, total_sold / days_evaluated), 1)
         lead_time = p.get("lead_time_days", 3)
         safety = p.get("safety_stock", 10)
         stock = p.get("stock_quantity", 0)
@@ -511,7 +516,7 @@ def get_reorder_points():
         
         results.append({
             "product_id": p["product_id"],
-            "product_name": p["product_name"],
+            "product_name": p_name,
             "current_stock": stock,
             "daily_usage": daily_usage,
             "lead_time_days": lead_time,
@@ -521,18 +526,40 @@ def get_reorder_points():
         })
     return {"status": "success", "reorder_points": results}
 
-# --- 2. RFM ANALYSIS ---
-@app.get("/api/v1/analytics/rfm", summary="วิเคราะห์การแบ่งกลุ่มลูกค้า (RFM Analysis)")
+
+# --- 3. REAL-DATA RFM ANALYSIS ---
+@app.get("/api/v1/analytics/rfm")
 def get_rfm_analysis():
-    cust_data = [
-        {"name": "สมชาย สายเปย์ (VIP)", "recency_days": 2, "frequency": 14, "monetary": 12500.0},
-        {"name": "สมหญิง รักสงบ", "recency_days": 12, "frequency": 5, "monetary": 2400.0},
-        {"name": "อนันต์ ตั้งใจเรียน", "recency_days": 45, "frequency": 2, "monetary": 550.0}
-    ]
+    now = datetime.now()
+    valid_orders = [o for o in orders_db if o.get("status") in ["Paid", "Completed"]]
+    
+    # รวบรวมข้อมูลพฤติกรรมการซื้อแยกตามชื่อลูกค้าจริง
+    customer_stats = defaultdict(lambda: {"last_date": None, "frequency": 0, "monetary": 0.0})
+    
+    for order in valid_orders:
+        c_name = order.get("customer_name") or "ลูกค้าทั่วไป"
+        amount = float(order.get("total_amount", 0.0))
+        ts_str = order.get("timestamp")
+        
+        try:
+            dt = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            dt = now
+            
+        stats = customer_stats[c_name]
+        stats["frequency"] += 1
+        stats["monetary"] += amount
+        if stats["last_date"] is None or dt > stats["last_date"]:
+            stats["last_date"] = dt
+
     rfm_results = []
-    for c in cust_data:
-        r, f, m = c["recency_days"], c["frequency"], c["monetary"]
-        r_score = 5 if r <= 7 else (4 if r <= 15 else (3 if r <= 30 else (2 if r <= 60 else 1)))
+    for c_name, stats in customer_stats.items():
+        recency_days = (now - stats["last_date"]).days if stats["last_date"] else 0
+        f = stats["frequency"]
+        m = stats["monetary"]
+        
+        # ให้คะแนน R-F-M จากสถิติการใช้งานจริง
+        r_score = 5 if recency_days <= 7 else (4 if recency_days <= 15 else (3 if recency_days <= 30 else (2 if recency_days <= 60 else 1)))
         f_score = 5 if f >= 10 else (4 if f >= 5 else (3 if f >= 3 else (2 if f >= 2 else 1)))
         m_score = 5 if m >= 10000 else (4 if m >= 5000 else (3 if m >= 2000 else (2 if m >= 500 else 1)))
         
@@ -540,22 +567,24 @@ def get_rfm_analysis():
             segment = "Champions (ลูกค้า VIP)"
         elif r_score >= 3 and f_score >= 3:
             segment = "Loyal Customers (ลูกค้าประจำ)"
-        elif r_score <= 2:
+        elif r_score <= 2 and f_score >= 2:
             segment = "At Risk (เสี่ยงเลิกซื้อ)"
         else:
-            segment = "General Customer"
+            segment = "General Customer (ลูกค้าทั่วไป)"
             
         rfm_results.append({
-            "customer_name": c["name"],
-            "recency_days": r,
+            "customer_name": c_name,
+            "recency_days": recency_days,
             "frequency": f,
             "monetary": m,
             "scores": f"R:{r_score} F:{f_score} M:{m_score}",
             "segment": segment
         })
+        
     return {"status": "success", "rfm_data": rfm_results}
 
-# --- PROMOTION API ENDPOINTS ---
+
+# --- PROMOTIONS API ENDPOINTS ---
 @app.get("/api/v1/admin/promotions")
 def get_promotions():
     return promotions_db
