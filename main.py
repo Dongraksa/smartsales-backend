@@ -1,7 +1,6 @@
 import os
 import shutil
 import math
-import random
 from typing import List, Optional, Any, Dict
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -15,7 +14,7 @@ from pydantic import BaseModel
 app = FastAPI(
     title="SmartSales Enterprise API",
     description="ระบบบริหารจัดการร้านค้า สต็อกสินค้า ระบบหลังบ้าน และ Real-Data Analytics (ROP, Market Basket, RFM)",
-    version="2.5.0"
+    version="2.1.0"
 )
 
 # ----------------------------------------------------
@@ -30,7 +29,7 @@ app.add_middleware(
 )
 
 # ----------------------------------------------------
-# 2. ฐานข้อมูลเริ่มต้น (In-Memory Storage)
+# 2. ฐานข้อมูลเริ่มต้น (In-Memory / Dynamic Storage)
 # ----------------------------------------------------
 users_db = [
     {
@@ -81,26 +80,33 @@ products_db = [
         "image_url": "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=300",
         "lead_time_days": 2,
         "safety_stock": 10
+    }
+]
+
+orders_db = [
+    {
+        "sale_id": 1001,
+        "customer_name": "สมชาย สายเปย์",
+        "timestamp": "2026-10-08 18:30:15",
+        "payment_method": "PromptPay",
+        "total_amount": 120.0,
+        "status": "Paid",
+        "items": [
+            {"product_name": "อเมริกาโน่เย็น (Iced Americano)", "quantity": 1, "subtotal": 55.0, "image_url": "https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=300"},
+            {"product_name": "ลาเต้เย็น (Iced Latte)", "quantity": 1, "subtotal": 65.0, "image_url": "https://images.unsplash.com/photo-1570968915860-54d5c301fa9f?w=300"}
+        ]
     },
     {
-        "product_id": 4,
-        "product_name": "คัปปุชชีโนเย็น (Iced Cappuccino)",
-        "cost_price": 28.0,
-        "selling_price": 60.0,
-        "stock_quantity": 25,
-        "image_url": "https://images.unsplash.com/photo-1534778101976-62847782c213?w=300",
-        "lead_time_days": 3,
-        "safety_stock": 10
-    },
-    {
-        "product_id": 5,
-        "product_name": "เค้กช็อกโกแลต (Chocolate Cake)",
-        "cost_price": 35.0,
-        "selling_price": 75.0,
-        "stock_quantity": 15,
-        "image_url": "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=300",
-        "lead_time_days": 2,
-        "safety_stock": 5
+        "sale_id": 1002,
+        "customer_name": "สมหญิง รักสงบ",
+        "timestamp": "2026-10-10 19:15:00",
+        "payment_method": "PromptPay",
+        "total_amount": 100.0,
+        "status": "Paid",
+        "items": [
+            {"product_name": "อเมริกาโน่เย็น (Iced Americano)", "quantity": 1, "subtotal": 55.0, "image_url": "https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=300"},
+            {"product_name": "ครัวซองต์เนยสด (Croissant)", "quantity": 1, "subtotal": 45.0, "image_url": "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=300"}
+        ]
     }
 ]
 
@@ -117,67 +123,6 @@ promotions_db = [
         "end_date": "2026-10-31"
     }
 ]
-
-# ----------------------------------------------------
-# ฟังก์ชันสร้างข้อมูลจำลอง 500 ออเดอร์
-# ----------------------------------------------------
-def generate_mock_orders(count=500):
-    orders = []
-    customers = [
-        "สมชาย สายเปย์", "สมหญิง รักสงบ", "แป้ง สุภาพร", "อนันต์ ตั้งใจเรียน",
-        "วิชัย ขายดี", "กนกวรรณ วันเพ็ญ", "ณัฐพงษ์ สมบูรณ์", "ชลธิชา น่ารัก",
-        "ธนกฤต ใจดี", "ภัทรวดี มีสุข", "ลูกค้าทั่วไป"
-    ]
-    payments = ["PromptPay", "Cash", "Credit Card"]
-    now = datetime.now() + timedelta(hours=7)
-
-    random.seed(42)  # สุ่มข้อมูลให้คงที่สวยงาม
-
-    for i in range(1, count + 1):
-        customer = random.choice(customers)
-        payment = random.choice(payments)
-        
-        # สุ่มช่วงเวลาย้อนหลัง 60 วัน (เน้นช่วง 12:00-13:00 และ 18:00-19:00 ให้เป็น Peak Hours)
-        days_back = random.randint(0, 60)
-        hour = random.choice([12, 13, 18, 19]) if random.random() < 0.5 else random.randint(8, 20)
-        minute = random.randint(0, 59)
-        second = random.randint(0, 59)
-        order_dt = now - timedelta(days=days_back, hours=random.randint(0, 12))
-        order_dt = order_dt.replace(hour=hour, minute=minute, second=second)
-
-        # สุ่ม 1-3 รายการสินค้า
-        num_items = random.choices([1, 2, 3], weights=[55, 30, 15])[0]
-        selected_prods = random.sample(products_db, num_items)
-        
-        items = []
-        total_amount = 0.0
-        for p in selected_prods:
-            qty = random.choices([1, 2, 3], weights=[75, 20, 5])[0]
-            subtotal = p["selling_price"] * qty
-            total_amount += subtotal
-            items.append({
-                "product_name": p["product_name"],
-                "quantity": qty,
-                "subtotal": subtotal,
-                "image_url": p["image_url"]
-            })
-
-        orders.append({
-            "sale_id": 1000 + i,
-            "customer_name": customer,
-            "timestamp": order_dt.strftime("%Y-%m-%d %H:%M:%S"),
-            "payment_method": payment,
-            "total_amount": round(total_amount, 2),
-            "status": "Paid",
-            "items": items
-        })
-
-    # เรียงลำดับจากออเดอร์ล่าสุดไปหาเก่าสุด
-    orders.sort(key=lambda x: x["timestamp"], reverse=True)
-    return orders
-
-# โหลดข้อมูล 500 ออเดอร์เข้าแรมทันทีที่เปิดระบบ
-orders_db = generate_mock_orders(500)
 
 # ----------------------------------------------------
 # 3. Schemas
@@ -233,7 +178,7 @@ def route_register_page():
 @app.post("/api/v1/auth/login")
 def login(data: LoginSchema):
     if data.role == "admin" or data.email == "admin@example.com":
-        if data.password in ["admin", "1234"]:
+        if data.password == "admin" or data.password == "1234":
             return {
                 "status": "success",
                 "role": "admin",
@@ -272,7 +217,7 @@ def register(data: RegisterSchema):
         "user_id": new_user["user_id"]
     }
 
-# --- CHECKOUT & ORDERS HANDLER (รองรับการเพิ่มออเดอร์ใหม่) ---
+# --- CHECKOUT & ORDERS HANDLER ---
 @app.post("/api/v1/pos/checkout")
 @app.post("/api/v1/orders")
 @app.post("/api/v1/checkout")
@@ -281,7 +226,6 @@ async def create_order(request: Request):
         data = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="รูปแบบข้อมูล JSON ไม่ถูกต้อง")
-    
     raw_items = []
     if isinstance(data, list):
         raw_items = data
@@ -289,7 +233,6 @@ async def create_order(request: Request):
         raw_items = data.get("items") or data.get("cart") or data.get("order_items") or []
     if not raw_items:
         raise HTTPException(status_code=400, detail="ไม่มีรายการสินค้าในตะกร้า")
-    
     processed_items = []
     total_amount = 0.0
     for item in raw_items:
@@ -300,6 +243,7 @@ async def create_order(request: Request):
         subtotal = price * qty
         total_amount += subtotal
         
+        # ตัดสต็อกสินค้าในตารางสินค้าจริง
         prod = next((p for p in products_db if (p_id and p["product_id"] == p_id) or p["product_name"] == p_name), None)
         if prod:
             prod["stock_quantity"] = max(0, prod["stock_quantity"] - qty)
@@ -316,13 +260,13 @@ async def create_order(request: Request):
         payment_method = data.get("payment_method") or data.get("payment") or "PromptPay"
         customer_name = data.get("customer_name") or "ลูกค้าทั่วไป"
         
-    sale_id = max([o["sale_id"] for o in orders_db], default=1000) + 1
+    sale_id = 1000 + len(orders_db) + 1
     new_order = {
         "sale_id": sale_id,
         "customer_name": customer_name,
         "timestamp": (datetime.now() + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S"),
         "payment_method": payment_method,
-        "total_amount": round(total_amount, 2),
+        "total_amount": total_amount,
         "status": "Paid",
         "items": processed_items
     }
@@ -331,7 +275,7 @@ async def create_order(request: Request):
         "status": "success",
         "message": "สั่งซื้อสำเร็จเรียบร้อยแล้ว",
         "sale_id": sale_id,
-        "total_amount": round(total_amount, 2)
+        "total_amount": total_amount
     }
 
 # --- PRODUCTS MANAGEMENT ---
@@ -435,9 +379,9 @@ def get_dashboard_summary(period: str = "all"):
     total_profit = total_revenue - total_cost
     low_stock_count = len([p for p in products_db if p["stock_quantity"] < 20])
     return {
-        "total_revenue": round(total_revenue, 2),
-        "total_cost": round(total_cost, 2),
-        "total_profit": round(total_profit, 2),
+        "total_revenue": total_revenue,
+        "total_cost": total_cost,
+        "total_profit": total_profit,
         "total_orders": total_orders,
         "low_stock_count": low_stock_count
     }
@@ -470,11 +414,15 @@ def get_peak_hours():
                 h = dt.hour
                 slot_label = f"{h:02d}:00 - {h+1:02d}:00"
                 amount = float(order.get("total_amount", 0.0))
+                
                 if slot_label in hours_map:
                     hours_map[slot_label] += amount
+                else:
+                    hours_map[slot_label] = amount
             except Exception:
                 pass
-    return [{"hour": hour_label, "total_revenue": round(rev, 2)} for hour_label, rev in hours_map.items()]
+    result = [{"hour": hour_label, "total_revenue": rev} for hour_label, rev in hours_map.items() if rev > 0 or hour_label in ["08:00 - 09:00", "09:00 - 10:00", "10:00 - 11:00", "11:00 - 12:00", "12:00 - 13:00", "18:00 - 19:00", "19:00 - 20:00"]]
+    return result
 
 @app.get("/api/v1/analytics/abc-analysis")
 def get_abc_analysis():
@@ -485,10 +433,12 @@ def get_abc_analysis():
                 p_name = item.get("product_name", "สินค้าทั่วไป")
                 subtotal = float(item.get("subtotal", 0.0))
                 summary[p_name] += subtotal
-    result = [{"product_name": name, "revenue": round(rev, 2)} for name, rev in summary.items()]
-    return result or [{"product_name": "ยังไม่มีข้อมูลการขาย", "revenue": 0.0}]
+    result = [{"product_name": name, "revenue": rev} for name, rev in summary.items()]
+    if not result:
+        result = [{"product_name": "ยังไม่มีข้อมูลการขาย", "revenue": 0.0}]
+    return result
 
-# --- REAL-DATA MARKET BASKET ANALYSIS ---
+# --- 1. REAL-DATA MARKET BASKET ANALYSIS ---
 @app.get("/api/v1/analytics/market-basket")
 def get_market_basket(min_support: float = 0.01, min_confidence: float = 0.01):
     valid_orders = [o for o in orders_db if o.get("status") in ["Paid", "Completed"]]
@@ -525,7 +475,7 @@ def get_market_basket(min_support: float = 0.01, min_confidence: float = 0.01):
     rules = sorted(rules, key=lambda x: x["lift"], reverse=True)
     return {"status": "success", "rules": rules}
 
-# --- REAL-DATA REORDER POINT (ROP) ANALYSIS ---
+# --- 2. REAL-DATA REORDER POINT (ROP) ANALYSIS ---
 @app.get("/api/v1/analytics/reorder-points")
 def get_reorder_points():
     valid_orders = [o for o in orders_db if o.get("status") in ["Paid", "Completed"]]
@@ -564,7 +514,7 @@ def get_reorder_points():
         })
     return {"status": "success", "reorder_points": results}
 
-# --- REAL-DATA RFM ANALYSIS ---
+# --- 3. REAL-DATA RFM ANALYSIS ---
 @app.get("/api/v1/analytics/rfm")
 def get_rfm_analysis():
     now = datetime.now() + timedelta(hours=7)
@@ -593,15 +543,15 @@ def get_rfm_analysis():
         f = stats["frequency"]
         m = stats["monetary"]
         
-        r_score = 5 if recency_days <= 5 else (4 if recency_days <= 15 else (3 if recency_days <= 30 else (2 if recency_days <= 45 else 1)))
-        f_score = 5 if f >= 50 else (4 if f >= 25 else (3 if f >= 10 else (2 if f >= 2 else 1)))
-        m_score = 5 if m >= 3000 else (4 if m >= 1500 else (3 if m >= 500 else (2 if m >= 200 else 1)))
+        r_score = 5 if recency_days <= 3 else (4 if recency_days <= 7 else (3 if recency_days <= 14 else (2 if recency_days <= 30 else 1)))
+        f_score = 5 if f >= 5 else (4 if f >= 3 else (3 if f >= 2 else 1))
+        m_score = 5 if m >= 1000 else (4 if m >= 500 else (3 if m >= 300 else 1))
         
         if f_score >= 4 or m_score >= 4:
             segment = "Champions (ลูกค้า VIP)"
         elif f_score >= 2 or m_score >= 3:
             segment = "Loyal Customers (ลูกค้าประจำ)"
-        elif recency_days > 30:
+        elif recency_days > 14:
             segment = "At Risk (เสี่ยงเลิกซื้อ)"
         elif f == 1:
             segment = "New Customer (ลูกค้าใหม่)"
@@ -612,7 +562,7 @@ def get_rfm_analysis():
             "customer_name": c_name,
             "recency_days": recency_days,
             "frequency": f,
-            "monetary": round(m, 2),
+            "monetary": m,
             "scores": f"R:{r_score} F:{f_score} M:{m_score}",
             "segment": segment
         })
