@@ -1,7 +1,6 @@
 import os
 import shutil
 import math
-import random
 from typing import List, Optional, Any, Dict
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -15,7 +14,7 @@ from pydantic import BaseModel
 app = FastAPI(
     title="SmartSales Enterprise API",
     description="ระบบบริหารจัดการร้านค้า สต็อกสินค้า ระบบหลังบ้าน และ Real-Data Analytics (ROP, Market Basket, RFM)",
-    version="2.5.0"
+    version="2.1.0"
 )
 
 # ----------------------------------------------------
@@ -81,26 +80,33 @@ products_db = [
         "image_url": "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=300",
         "lead_time_days": 2,
         "safety_stock": 10
+    }
+]
+
+orders_db = [
+    {
+        "sale_id": 1001,
+        "customer_name": "สมชาย สายเปย์",
+        "timestamp": "2026-10-08 18:30:15",
+        "payment_method": "PromptPay",
+        "total_amount": 120.0,
+        "status": "Paid",
+        "items": [
+            {"product_name": "อเมริกาโน่เย็น (Iced Americano)", "quantity": 1, "subtotal": 55.0, "image_url": "https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=300"},
+            {"product_name": "ลาเต้เย็น (Iced Latte)", "quantity": 1, "subtotal": 65.0, "image_url": "https://images.unsplash.com/photo-1570968915860-54d5c301fa9f?w=300"}
+        ]
     },
     {
-        "product_id": 4,
-        "product_name": "คัปปุชชีโนเย็น (Iced Cappuccino)",
-        "cost_price": 28.0,
-        "selling_price": 60.0,
-        "stock_quantity": 25,
-        "image_url": "https://images.unsplash.com/photo-1534778101976-62847782c213?w=300",
-        "lead_time_days": 3,
-        "safety_stock": 10
-    },
-    {
-        "product_id": 5,
-        "product_name": "เค้กช็อกโกแลต (Chocolate Cake)",
-        "cost_price": 35.0,
-        "selling_price": 75.0,
-        "stock_quantity": 15,
-        "image_url": "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=300",
-        "lead_time_days": 2,
-        "safety_stock": 5
+        "sale_id": 1002,
+        "customer_name": "สมหญิง รักสงบ",
+        "timestamp": "2026-10-10 19:15:00",
+        "payment_method": "PromptPay",
+        "total_amount": 100.0,
+        "status": "Paid",
+        "items": [
+            {"product_name": "อเมริกาโน่เย็น (Iced Americano)", "quantity": 1, "subtotal": 55.0, "image_url": "https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=300"},
+            {"product_name": "ครัวซองต์เนยสด (Croissant)", "quantity": 1, "subtotal": 45.0, "image_url": "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=300"}
+        ]
     }
 ]
 
@@ -117,73 +123,6 @@ promotions_db = [
         "end_date": "2026-10-31"
     }
 ]
-
-# ----------------------------------------------------
-# ฟังก์ชันสร้างข้อมูลจำลอง 500 ออเดอร์ (พร้อม Buying Patterns)
-# ----------------------------------------------------
-def generate_mock_orders(count=500):
-    orders = []
-    customers = [
-        "สมชาย สายเปย์", "สมหญิง รักสงบ", "แป้ง สุภาพร", "อนันต์ ตั้งใจเรียน",
-        "วิชัย ขายดี", "กนกวรรณ วันเพ็ญ", "ณัฐพงษ์ สมบูรณ์", "ชลธิชา น่ารัก",
-        "ธนกฤต ใจดี", "ภัทรวดี มีสุข", "ลูกค้าทั่วไป"
-    ]
-    payments = ["PromptPay", "Cash", "Credit Card"]
-    now = datetime.now() + timedelta(hours=7)
-
-    random.seed(42)
-    p_map = {p["product_id"]: p for p in products_db}
-
-    for i in range(1, count + 1):
-        customer = random.choice(customers)
-        payment = random.choice(payments)
-        
-        days_back = random.randint(0, 60)
-        hour = random.choice([12, 13, 18, 19]) if random.random() < 0.6 else random.randint(8, 20)
-        minute = random.randint(0, 59)
-        second = random.randint(0, 59)
-        order_dt = now - timedelta(days=days_back, hours=random.randint(0, 12))
-        order_dt = order_dt.replace(hour=hour, minute=minute, second=second)
-
-        # กำหนดแพตเทิร์นการซื้อจำลองให้เห็นความแตกต่างของสินค้าขายดี vs สินค้าขายไม่ดี
-        pattern_roll = random.random()
-        if pattern_roll < 0.50:
-            selected_prods = [p_map[1], p_map[3]]  # อเมริกาโน่ + ครัวซองต์ (ขายดีแพ็กคู่)
-        elif pattern_roll < 0.75:
-            selected_prods = [p_map[2], p_map[5]]  # ลาเต้ + เค้กช็อกโกแลต (คู่รอง)
-        elif pattern_roll < 0.90:
-            selected_prods = [p_map[1]]            # อเมริกาโน่เดี่ยว
-        else:
-            selected_prods = [p_map[4]]            # คัปปุชชีโน (สินค้าขายช้า)
-
-        items = []
-        total_amount = 0.0
-        for p in selected_prods:
-            qty = random.choices([1, 2], weights=[85, 15])[0]
-            subtotal = p["selling_price"] * qty
-            total_amount += subtotal
-            items.append({
-                "product_name": p["product_name"],
-                "quantity": qty,
-                "subtotal": subtotal,
-                "image_url": p["image_url"]
-            })
-
-        orders.append({
-            "sale_id": 1000 + i,
-            "customer_name": customer,
-            "timestamp": order_dt.strftime("%Y-%m-%d %H:%M:%S"),
-            "payment_method": payment,
-            "total_amount": round(total_amount, 2),
-            "status": "Paid",
-            "items": items
-        })
-
-    orders.sort(key=lambda x: x["timestamp"], reverse=True)
-    return orders
-
-# โหลดข้อมูลจำลอง 500 ออเดอร์เข้าแรมทันทีที่เปิดระบบ
-orders_db = generate_mock_orders(500)
 
 # ----------------------------------------------------
 # 3. Schemas
@@ -599,15 +538,15 @@ def get_rfm_analysis():
         f = stats["frequency"]
         m = stats["monetary"]
         
-        r_score = 5 if recency_days <= 5 else (4 if recency_days <= 15 else (3 if recency_days <= 30 else (2 if recency_days <= 45 else 1)))
-        f_score = 5 if f >= 50 else (4 if f >= 25 else (3 if f >= 10 else (2 if f >= 2 else 1)))
-        m_score = 5 if m >= 3000 else (4 if m >= 1500 else (3 if m >= 500 else (2 if m >= 200 else 1)))
+        r_score = 5 if recency_days <= 3 else (4 if recency_days <= 7 else (3 if recency_days <= 14 else (2 if recency_days <= 30 else 1)))
+        f_score = 5 if f >= 5 else (4 if f >= 3 else (3 if f >= 2 else 1))
+        m_score = 5 if m >= 1000 else (4 if m >= 500 else (3 if m >= 300 else 1))
         
         if f_score >= 4 or m_score >= 4:
             segment = "Champions (ลูกค้า VIP)"
         elif f_score >= 2 or m_score >= 3:
             segment = "Loyal Customers (ลูกค้าประจำ)"
-        elif recency_days > 30:
+        elif recency_days > 14:
             segment = "At Risk (เสี่ยงเลิกซื้อ)"
         elif f == 1:
             segment = "New Customer (ลูกค้าใหม่)"
