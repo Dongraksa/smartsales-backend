@@ -16,7 +16,7 @@ from pydantic import BaseModel
 app = FastAPI(
     title="SmartSales Enterprise API",
     description="ระบบบริหารจัดการร้านค้า สต็อกสินค้า ระบบหลังบ้าน และ Real-Data Analytics (ROP, Market Basket, RFM)",
-    version="2.2.0"
+    version="2.3.0"
 )
 
 # ----------------------------------------------------
@@ -31,7 +31,7 @@ app.add_middleware(
 )
 
 # ----------------------------------------------------
-# 2. ฟังก์ชันจัดการ PostgreSQL Database
+# 2. ฟังก์ชันจัดการ PostgreSQL Database (พร้อมระบบป้องกันค้าง)
 # ----------------------------------------------------
 DB_HOST = os.getenv("DB_HOST", "dpg-db6qm58m7kps73avm6ig-a.singapore-postgres.render.com")
 DB_NAME = os.getenv("DB_NAME", "smartsales_r99y")
@@ -46,10 +46,12 @@ def get_db_connection():
         user=DB_USER,
         password=DB_PASS,
         port=DB_PORT,
-        sslmode="require"
+        sslmode="require",
+        connect_timeout=3  # ตัดการเชื่อมต่อทันทีใน 3 วินาทีหาก DB ไม่ตอบรับ เพื่อไม่ให้เว็บค้าง
     )
 
 def fetch_orders_from_db():
+    conn = None
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -73,11 +75,13 @@ def fetch_orders_from_db():
         """)
         orders = cur.fetchall()
         cur.close()
-        conn.close()
         return orders
     except Exception as e:
-        print(f"Database Read Error: {e}")
+        print(f"❌ Database Read Error: {e}")
         return []
+    finally:
+        if conn:
+            conn.close()
 
 # ----------------------------------------------------
 # 3. ข้อมูลเริ่มต้นอื่นๆ (In-Memory)
@@ -261,7 +265,7 @@ def register(data: RegisterSchema):
         "user_id": new_user["user_id"]
     }
 
-# --- CHECKOUT & ORDERS HANDLER (บันทึกออเดอร์ใหม่ลง PostgreSQL) ---
+# --- CHECKOUT & ORDERS HANDLER ---
 @app.post("/api/v1/pos/checkout")
 @app.post("/api/v1/orders")
 @app.post("/api/v1/checkout")
@@ -304,6 +308,7 @@ async def create_order(request: Request):
         
     thaitime = datetime.now() + timedelta(hours=7)
     
+    conn = None
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -321,7 +326,6 @@ async def create_order(request: Request):
             
         conn.commit()
         cur.close()
-        conn.close()
         
         return {
             "status": "success",
@@ -331,6 +335,9 @@ async def create_order(request: Request):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database insert error: {e}")
+    finally:
+        if conn:
+            conn.close()
 
 # --- PRODUCTS MANAGEMENT ---
 @app.get("/api/v1/products")
@@ -447,16 +454,19 @@ def get_orders():
 
 @app.patch("/api/v1/admin/orders/{sale_id}/status")
 def update_order_status(sale_id: int, status_update: OrderStatusUpdate):
+    conn = None
     try:
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute("UPDATE orders SET status = %s WHERE sale_id = %s;", (status_update.status, sale_id))
         conn.commit()
         cur.close()
-        conn.close()
         return {"status": "success", "sale_id": sale_id, "new_status": status_update.status}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
 
 @app.get("/api/v1/analytics/peak-hours")
 def get_peak_hours():
