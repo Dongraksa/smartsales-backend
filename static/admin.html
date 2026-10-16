@@ -93,7 +93,7 @@
                         <i class="fa-solid fa-boxes-stacked me-2"></i> สต็อกสินค้า & ROP
                     </a>
                     <a class="nav-link" href="#" onclick="switchTab('analytics')">
-                        <i class="fa-solid fa-brain me-2"></i> การวิเคราะห์การขาย
+                        <i class="fa-solid fa-brain me-2"></i> การวิเคราะห์การขาย & พฤติกรรม
                     </a>
                     <a class="nav-link" href="#" onclick="switchTab('promotions')">
                         <i class="fa-solid fa-tags me-2"></i> จัดการโปรโมชัน
@@ -119,6 +119,7 @@
                         </div>
                     </div>
                 </div>
+
                 <!-- TAB 1: DASHBOARD SUMMARY -->
                 <div id="tab-dashboard" class="tab-content-item">
                     <div class="row g-4 mb-4">
@@ -158,7 +159,7 @@
                             <div class="card-custom p-4 cursor-pointer" onclick="openLowStockModal()">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
-                                        <p class="text-muted small fw-semibold mb-1">สินค้าต้องเติมสต็อก (< 20 ชิ้น)</p>
+                                        <p class="text-muted small fw-semibold mb-1">สินค้าต้องเติมสต็อก (&lt; 20 ชิ้น)</p>
                                         <h3 class="fw-bold text-dark mb-0" id="dash-low-stock-count">0 รายการ</h3>
                                     </div>
                                     <div class="icon-box bg-warning-subtle text-warning">
@@ -171,6 +172,21 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- AI PROMOTION RECOMMENDATIONS BANNER -->
+                    <div class="card-custom p-4 mb-4" style="border: 1px solid #e2e8f0; background: linear-gradient(135deg, #ffffff 0%, #f3e8ff 100%);">
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <div>
+                                <h5 class="fw-bold mb-1" style="color: #7e22ce;"><i class="fa-solid fa-wand-magic-sparkles me-2"></i>ข้อเสนอโปรโมชันแนะนำจาก AI (AI Smart Recommendations)</h5>
+                                <p class="text-muted small mb-0">จับคู่สินค้าขายดี + สินค้าขายช้า เพื่อเร่งการระบายสต็อกและกระตุ้นยอดขาย</p>
+                            </div>
+                            <button class="btn btn-sm btn-outline-purple rounded-pill px-3" style="color: #9333ea; border-color: #9333ea;" onclick="switchTab('promotions')">ดูในหน้าโปรโมชัน</button>
+                        </div>
+                        <div id="dash-ai-recommendations-list" class="row g-3">
+                            <div class="col-12 text-center py-2 text-muted">กำลังประมวลผลข้อเสนอแนะนำจาก AI...</div>
+                        </div>
+                    </div>
+
                     <!-- Recent Orders Table -->
                     <div class="card-custom p-4">
                         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -196,6 +212,7 @@
                         </div>
                     </div>
                 </div>
+
                 <!-- TAB 2: ORDERS MANAGEMENT -->
                 <div id="tab-orders" class="tab-content-item d-none">
                     <div class="card-custom p-4">
@@ -220,6 +237,7 @@
                         </div>
                     </div>
                 </div>
+
                 <!-- TAB 3: PRODUCTS INVENTORY & ROP -->
                 <div id="tab-products" class="tab-content-item d-none">
                     <div class="card-custom p-4 mb-4">
@@ -248,8 +266,7 @@
                             </table>
                         </div>
                     </div>
-
-                    <!-- NEW SECTION: REORDER POINT (ROP) ANALYSIS TABLE -->
+                    <!-- REORDER POINT (ROP) ANALYSIS TABLE -->
                     <div class="card-custom p-4">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <div>
@@ -281,14 +298,70 @@
                     </div>
                 </div>
 
-                <!-- TAB 4: ADVANCED ANALYTICS (PEAK HOURS, ABC, MARKET BASKET, RFM) -->
+                <!-- TAB 4: ADVANCED ANALYTICS (INCLUDES NEW CHURN RISK & PERSONAL PATTERNS) -->
                 <div id="tab-analytics" class="tab-content-item d-none">
+                    
+                    <!-- NEW SECTION 1: CUSTOMER CHURN RISK & RETENTION ANALYSIS -->
+                    <div class="card-custom p-4 mb-4" style="border-left: 5px solid #dc2626;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <h5 class="fw-bold mb-1 text-danger"><i class="fa-solid fa-user-slash me-2"></i>วิเคราะห์แนวโน้มการสูญเสียลูกค้า (Customer Churn Risk & Retention)</h5>
+                                <p class="text-muted small mb-0">คำนวณจากความถี่ซื้อเฉลี่ยเปรียบเทียบกับวันที่ไม่ได้มาซื้อ (Recency) เพื่อส่งคูปองดึงดูดใจกลับมาซื้อซ้ำ</p>
+                            </div>
+                            <span class="badge bg-danger-subtle text-danger px-3 py-2 fw-bold">Retention Alert</span>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>ชื่อลูกค้า</th>
+                                        <th class="text-center">จำนวนออเดอร์ทั้งหมด</th>
+                                        <th class="text-center">รอบซื้อเฉลี่ยปกติ</th>
+                                        <th class="text-center">ไม่ได้ซื้อแล้ว (Recency)</th>
+                                        <th class="text-center">ระดับความเสี่ยง (Churn Risk)</th>
+                                        <th class="text-center">การดำเนินการดึงลูกค้า (Win-Back Action)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="churn-risk-tbody">
+                                    <tr><td colspan="6" class="text-center py-4 text-muted">กำลังประมวลผลวิเคราะห์ความเสี่ยง Churn...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- NEW SECTION 2: PERSONAL SHOPPING PATTERNS & TIME PREFERENCES -->
+                    <div class="card-custom p-4 mb-4" style="border-left: 5px solid #2563eb;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <h5 class="fw-bold mb-1 text-primary"><i class="fa-solid fa-clock-rotate-left me-2"></i>วิเคราะห์ช่วงวันและเวลาซื้อประจำรายบุคคล (Personal Shopping Patterns)</h5>
+                                <p class="text-muted small mb-0">วิเคราะห์พฤติกรรมเชิงลึกว่าลูกค้ารายบุคคลชอบซื้อวันใด ช่วงเวลาใด และสินค้าชิ้นโปรดคืออะไร</p>
+                            </div>
+                            <span class="badge bg-primary-subtle text-primary px-3 py-2 fw-bold">Personalized Targeting</span>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>ชื่อลูกค้า</th>
+                                        <th class="text-center">วันประจำที่ชอบซื้อ</th>
+                                        <th class="text-center">ช่วงเวลาประจำ</th>
+                                        <th class="text-center">เมนูโปรดประจำตัว</th>
+                                        <th class="text-center">บรอดแคสต์โปรโมชันเฉพาะบุคคล</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="personal-patterns-tbody">
+                                    <tr><td colspan="5" class="text-center py-4 text-muted">กำลังประมวลผลวิเคราะห์พฤติกรรมรายบุคคล...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Charts Row: Peak Hours & ABC Analysis -->
                     <div class="row g-4 mb-4">
-                        <!-- Peak Hours Chart Card -->
                         <div class="col-lg-6">
                             <div class="card-custom p-4 h-100 d-flex flex-column justify-content-between">
                                 <div>
-                                    <h5 class="fw-bold mb-3"><i class="fa-solid fa-clock-rotate-left text-primary me-2"></i>ช่วงเวลาขายดี (Peak Hours)</h5>
+                                    <h5 class="fw-bold mb-3"><i class="fa-solid fa-clock-rotate-left text-primary me-2"></i>ช่วงเวลาขายดีรวมหน้าร้าน (Peak Hours Overall)</h5>
                                     <div style="height: 240px;" class="mb-3">
                                         <canvas id="peakHoursChart"></canvas>
                                     </div>
@@ -299,7 +372,6 @@
                                 </div>
                             </div>
                         </div>
-                        <!-- ABC Analysis Chart Card -->
                         <div class="col-lg-6">
                             <div class="card-custom p-4 h-100 d-flex flex-column justify-content-between">
                                 <div>
@@ -316,11 +388,10 @@
                         </div>
                     </div>
 
-                    <!-- NEW SECTION: RFM CUSTOMER SEGMENTATION TABLE -->
+                    <!-- RFM CUSTOMER SEGMENTATION TABLE -->
                     <div class="card-custom p-4 mb-4">
                         <h5 class="fw-bold mb-1 text-primary"><i class="fa-solid fa-users-viewfinder me-2"></i>การแบ่งกลุ่มลูกค้าตามพฤติกรรม (RFM Analysis)</h5>
                         <p class="text-muted small mb-3">จำแนกกลุ่มด้วย Recency (ซื้อล่าสุด), Frequency (ความถี่), และ Monetary (ยอดใช้จ่าย)</p>
-                        
                         <div class="table-responsive">
                             <table class="table table-hover align-middle">
                                 <thead class="table-light">
@@ -344,7 +415,6 @@
                     <div class="card-custom p-4">
                         <h5 class="fw-bold mb-1"><i class="fa-solid fa-diagram-project text-purple me-2"></i>การวิเคราะห์สินค้าซื้อคู่กัน (Market Basket Analysis)</h5>
                         <p class="text-muted small mb-3">ประมวลผลด้วย Apriori Algorithm เพื่อจัดโปรโมชันจับคู่สินค้าขายดี</p>
-                        
                         <div class="table-responsive">
                             <table class="table table-bordered align-middle">
                                 <thead class="table-light">
@@ -363,10 +433,11 @@
                             </table>
                         </div>
                     </div>
+
                 </div>
+
                 <!-- TAB 5: PROMOTIONS MANAGEMENT -->
                 <div id="tab-promotions" class="tab-content-item d-none">
-                    <!-- Summary Badges -->
                     <div class="row g-4 mb-4">
                         <div class="col-md-4">
                             <div class="card-custom p-4">
@@ -399,7 +470,7 @@
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
                                         <p class="text-muted small fw-semibold mb-1">ข้อเสนอแนะนำจาก AI</p>
-                                        <h3 class="fw-bold text-purple mb-0">2 รายการ</h3>
+                                        <h3 class="fw-bold text-purple mb-0" id="promo-ai-rec-count">0 รายการ</h3>
                                     </div>
                                     <div class="icon-box bg-purple-subtle text-purple" style="background-color: #f3e8ff; color: #9333ea;">
                                         <i class="fa-solid fa-wand-magic-sparkles"></i>
@@ -408,6 +479,21 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- AI PROMOTION RECOMMENDATIONS BOX -->
+                    <div class="card-custom p-4 mb-4" style="border: 1px solid #e2e8f0; background: #ffffff;">
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <div>
+                                <h5 class="fw-bold mb-1 text-purple" style="color: #7e22ce;"><i class="fa-solid fa-wand-magic-sparkles me-2"></i>ข้อเสนอโปรโมชันแนะนำจาก AI (AI Smart Recommendations)</h5>
+                                <p class="text-muted small mb-0">ระบบวิเคราะห์ข้อมูลการขายเพื่อจับคู่สินค้าขายดี (Top Seller) ร่วมกับสินค้าขายช้า (Slow Moving) ช่วยดันยอดขายและระบายสต็อก</p>
+                            </div>
+                            <span class="badge bg-purple px-3 py-2 fs-6">AI Auto-Matched</span>
+                        </div>
+                        <div id="ai-recommendations-list" class="row g-3">
+                            <div class="col-12 text-center py-3 text-muted">กำลังประมวลผลหาคู่โปรโมชันแนะนำ...</div>
+                        </div>
+                    </div>
+
                     <!-- Main Promotions Table -->
                     <div class="card-custom p-4">
                         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -480,7 +566,6 @@
                             <label class="form-label small fw-semibold">ชื่อแคมเปญโปรโมชัน</label>
                             <input type="text" id="promo-title" class="form-control rounded-3" placeholder="เช่น เซตกาแฟสด + ขนมปังสุดคุ้ม" required>
                         </div>
-                        
                         <div class="mb-3">
                             <label class="form-label small fw-semibold">ประเภทโปรโมชัน</label>
                             <select id="promo-type" class="form-select rounded-3" required>
@@ -639,6 +724,7 @@
         let currentProducts = [];
         let isUserEditingStatus = false;
         let selectedPeriod = 'all';
+
         const statusTH = {
             'Paid': 'ชำระเงินแล้ว',
             'Completed': 'เสร็จสิ้น',
@@ -650,6 +736,7 @@
         document.addEventListener("DOMContentLoaded", function() {
             const adminName = sessionStorage.getItem('user_name') || 'ผู้ดูแลระบบ';
             document.getElementById('admin-user-display').innerText = adminName;
+            
             if (typeof bootstrap !== 'undefined') {
                 const elProd = document.getElementById('productModal');
                 const elOrder = document.getElementById('orderDetailsModal');
@@ -662,15 +749,23 @@
                 if (elLow) lowStockModalObj = new bootstrap.Modal(elLow);
                 if (elPromo) promoModalObj = new bootstrap.Modal(elPromo);
             }
-            document.getElementById('modal-save-status-btn').addEventListener('click', async function() {
-                if (!activeModalSaleId) return;
-                const newStatus = document.getElementById('modal-order-status-select').value;
-                await changeOrderStatus(activeModalSaleId, newStatus);
-                if (orderDetailsModalObj) orderDetailsModalObj.hide();
-            });
+
+            const btnSaveStatus = document.getElementById('modal-save-status-btn');
+            if (btnSaveStatus) {
+                btnSaveStatus.addEventListener('click', async function() {
+                    if (!activeModalSaleId) return;
+                    const newStatus = document.getElementById('modal-order-status-select').value;
+                    await changeOrderStatus(activeModalSaleId, newStatus);
+                    if (orderDetailsModalObj) orderDetailsModalObj.hide();
+                });
+            }
+
             const todayStr = new Date().toISOString().split('T')[0];
-            document.getElementById('promo-start').value = todayStr;
+            const promoStart = document.getElementById('promo-start');
+            if (promoStart) promoStart.value = todayStr;
+
             loadAllAdminData();
+            loadAIRecommendations();
             setInterval(loadAllAdminData, 3000);
         });
 
@@ -686,23 +781,29 @@
             if(tabName === 'products') navLinks[2]?.classList.add('active');
             if(tabName === 'analytics') navLinks[3]?.classList.add('active');
             if(tabName === 'promotions') navLinks[4]?.classList.add('active');
+
             const titles = {
                 'dashboard': 'แดชบอร์ดผู้ดูแลระบบ',
                 'orders': 'จัดการและติดตามสถานะออเดอร์',
                 'products': 'จัดการสต็อกและระบบคำนวณ ROP',
-                'analytics': 'วิเคราะห์พฤติกรรมการขายขั้นสูง (Analytics & RFM)',
+                'analytics': 'วิเคราะห์พฤติกรรมการขายขั้นสูง (Analytics, RFM, Churn & Personal Patterns)',
                 'promotions': 'ระบบจัดการโปรโมชันและแคมเปญ'
             };
-            document.getElementById('page-title').innerText = titles[tabName] || 'SmartSales Admin';
+            const pTitle = document.getElementById('page-title');
+            if (pTitle) pTitle.innerText = titles[tabName] || 'SmartSales Admin';
+
             if (tabName === 'analytics') {
                 setTimeout(() => {
                     renderAnalyticsCharts();
                     fetchRFMData();
+                    fetchChurnRiskData();
+                    fetchPersonalPatternsData();
                 }, 100);
             } else if (tabName === 'products') {
                 fetchROPData();
             } else if (tabName === 'promotions') {
                 fetchPromotions();
+                loadAIRecommendations();
             }
         }
 
@@ -723,7 +824,7 @@
 
         async function fetchSummary() {
             try {
-                const res = await fetch(`/api/v1/admin/dashboard-summary?period=${selectedPeriod}`);
+                const res = await fetch(`/api/v1/admin/dashboard-summary?period=${selectedPeriod}&_t=${Date.now()}`);
                 if (!res.ok) return;
                 const data = await res.json();
                 
@@ -731,9 +832,12 @@
                 document.getElementById('dash-total-orders').innerText = (data.total_orders || 0) + ' รายการ';
                 document.getElementById('dash-low-stock-count').innerText = (data.low_stock_count || 0) + ' รายการ';
                 
-                document.getElementById('rev-modal-revenue').innerText = (data.total_revenue || 0).toFixed(2) + ' ฿';
-                document.getElementById('rev-modal-cost').innerText = (data.total_cost || 0).toFixed(2) + ' ฿';
-                document.getElementById('rev-modal-profit').innerText = (data.total_profit || 0).toFixed(2) + ' ฿';
+                const mRev = document.getElementById('rev-modal-revenue');
+                const mCost = document.getElementById('rev-modal-cost');
+                const mProfit = document.getElementById('rev-modal-profit');
+                if (mRev) mRev.innerText = (data.total_revenue || 0).toFixed(2) + ' ฿';
+                if (mCost) mCost.innerText = (data.total_cost || 0).toFixed(2) + ' ฿';
+                if (mProfit) mProfit.innerText = (data.total_profit || 0).toFixed(2) + ' ฿';
             } catch (err) { console.error("Summary error:", err); }
         }
 
@@ -747,17 +851,19 @@
         async function fetchOrders() {
             if (isUserEditingStatus) return;
             try {
-                const res = await fetch('/api/v1/admin/orders');
+                const res = await fetch(`/api/v1/admin/orders?_t=${Date.now()}`);
                 if (!res.ok) return;
                 const orders = await res.json();
                 const dashTbody = document.getElementById('dash-recent-orders-body');
                 const fullTbody = document.getElementById('full-orders-table-body');
                 if (!dashTbody || !fullTbody) return;
+
                 if (!orders || orders.length === 0) {
                     dashTbody.innerHTML = '<tr><td colspan="6" class="text-center py-3 text-muted">ยังไม่มีออเดอร์ในระบบ</td></tr>';
                     fullTbody.innerHTML = '<tr><td colspan="7" class="text-center py-3 text-muted">ยังไม่มีออเดอร์ในระบบ</td></tr>';
                     return;
                 }
+
                 dashTbody.innerHTML = '';
                 fullTbody.innerHTML = '';
                 orders.forEach((o, idx) => {
@@ -777,6 +883,7 @@
                             </tr>
                         `;
                     }
+
                     const itemsArr = o.items || [];
                     const itemsText = itemsArr.map(i => `${i.product_name} (x${i.quantity})`).join(', ');
                     
@@ -808,7 +915,7 @@
 
         async function fetchProducts() {
             try {
-                const res = await fetch('/api/v1/products');
+                const res = await fetch(`/api/v1/products?_t=${Date.now()}`);
                 if (!res.ok) return;
                 currentProducts = await res.json();
                 
@@ -818,6 +925,7 @@
                 tbody.innerHTML = '';
                 if (lowStockList) lowStockList.innerHTML = '';
                 let lowStockFound = false;
+
                 currentProducts.forEach(p => {
                     tbody.innerHTML += `
                         <tr>
@@ -858,7 +966,6 @@
             } catch (err) { console.error("Products error:", err); }
         }
 
-        // --- NEW FUNCTION 1: FETCH REORDER POINT (ROP) DATA ---
         async function fetchROPData() {
             try {
                 const res = await fetch('/api/v1/analytics/reorder-points');
@@ -867,7 +974,6 @@
                 const tbody = document.getElementById('rop-tbody');
                 if (!tbody) return;
                 tbody.innerHTML = '';
-
                 if (data.status === 'success' && data.reorder_points.length > 0) {
                     data.reorder_points.forEach(item => {
                         let badge = '<span class="badge bg-success">ปกติ (Stock OK)</span>';
@@ -892,7 +998,6 @@
             } catch (e) { console.error("Fetch ROP Error:", e); }
         }
 
-        // --- NEW FUNCTION 2: FETCH RFM ANALYSIS DATA ---
         async function fetchRFMData() {
             try {
                 const res = await fetch('/api/v1/analytics/rfm');
@@ -901,14 +1006,12 @@
                 const tbody = document.getElementById('rfm-tbody');
                 if (!tbody) return;
                 tbody.innerHTML = '';
-
                 if (data.status === 'success' && data.rfm_data.length > 0) {
                     data.rfm_data.forEach(c => {
                         let segBadge = '<span class="badge bg-secondary">ลูกค้าทั่วไป</span>';
                         if (c.segment.includes("VIP")) segBadge = '<span class="badge bg-purple">Champions (VIP)</span>';
                         else if (c.segment.includes("ประจำ")) segBadge = '<span class="badge bg-success">Loyal Customers</span>';
                         else if (c.segment.includes("เสี่ยง")) segBadge = '<span class="badge bg-danger">At Risk</span>';
-
                         tbody.innerHTML += `
                             <tr>
                                 <td class="fw-bold">${c.customer_name}</td>
@@ -924,10 +1027,184 @@
             } catch (e) { console.error("Fetch RFM Error:", e); }
         }
 
-        // --- PROMOTIONS MANAGEMENT LOGIC ---
+        // --- NEW FETCH 1: CHURN RISK DATA & WIN-BACK COUPON ACTION ---
+        async function fetchChurnRiskData() {
+            try {
+                const res = await fetch('/api/v1/analytics/churn-risk');
+                if (!res.ok) return;
+                const data = await res.json();
+                const tbody = document.getElementById('churn-risk-tbody');
+                if (!tbody) return;
+                tbody.innerHTML = '';
+                if (data.status === 'success' && data.churn_data.length > 0) {
+                    data.churn_data.forEach(c => {
+                        let riskBadge = '<span class="badge bg-success">ปกติ</span>';
+                        if (c.risk_level.includes("Critical")) {
+                            riskBadge = '<span class="badge bg-danger">Critical (เสี่ยงสูงมาก)</span>';
+                        } else if (c.risk_level.includes("Warning")) {
+                            riskBadge = '<span class="badge bg-warning text-dark">Warning (เริ่มขาดการติดต่อ)</span>';
+                        }
+                        tbody.innerHTML += `
+                            <tr>
+                                <td class="fw-bold">${c.customer_name}</td>
+                                <td class="text-center">${c.total_orders} ครั้ง</td>
+                                <td class="text-center">ทุกๆ ${c.avg_interval_days} วัน</td>
+                                <td class="text-center text-danger fw-bold">${c.recency_days} วันที่แล้ว</td>
+                                <td class="text-center">${riskBadge}</td>
+                                <td class="text-center">
+                                    <button class="btn btn-sm btn-outline-danger rounded-pill px-3 fw-semibold" 
+                                            onclick="sendWinBackCoupon('${c.customer_name}')">
+                                        🎁 ส่งคูปองส่วนลดง้อลูกค้า 20฿
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">ไม่พบประวัติลูกค้าเสี่ยงเลิกซื้อ</td></tr>';
+                }
+            } catch (e) { console.error("Fetch Churn Risk Error:", e); }
+        }
+
+        async function sendWinBackCoupon(customerName) {
+            try {
+                const res = await fetch('/api/v1/admin/promotions/win-back', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        customer_name: customerName,
+                        discount_amount: 20.0
+                    })
+                });
+                if (res.ok) {
+                    alert(`🎉 ส่งคูปองส่วนลดต้อนรับกลับ ให้คุณ ${customerName} สำเร็จแล้ว! สิทธิ์ถูกเปิดใช้งานในหน้าระบบโปรโมชัน`);
+                    switchTab('promotions');
+                    fetchPromotions();
+                } else {
+                    alert('ไม่สามารถส่งคูปองได้');
+                }
+            } catch (e) { alert('เกิดข้อผิดพลาดในการส่งคูปอง'); }
+        }
+
+        // --- NEW FETCH 2: PERSONAL SHOPPING PATTERNS DATA ---
+        async function fetchPersonalPatternsData() {
+            try {
+                const res = await fetch('/api/v1/analytics/personal-patterns');
+                if (!res.ok) return;
+                const data = await res.json();
+                const tbody = document.getElementById('personal-patterns-tbody');
+                if (!tbody) return;
+                tbody.innerHTML = '';
+                if (data.status === 'success' && data.patterns.length > 0) {
+                    data.patterns.forEach(p => {
+                        tbody.innerHTML += `
+                            <tr>
+                                <td class="fw-bold">${p.customer_name}</td>
+                                <td class="text-center"><span class="badge bg-primary-subtle text-primary fw-bold px-3 py-1">วัน${p.preferred_day}</span></td>
+                                <td class="text-center"><span class="badge bg-info-subtle text-dark fw-bold px-3 py-1">${p.preferred_hour}</span></td>
+                                <td class="text-center fw-bold text-success">${p.favorite_item}</td>
+                                <td class="text-center">
+                                    <button class="btn btn-sm btn-outline-primary rounded-pill px-3" 
+                                            onclick="sendPersonalNotification('${p.customer_name}', '${p.preferred_day}', '${p.preferred_hour}', '${p.favorite_item}')">
+                                        📲 บรอดแคสต์เตือนตามเวลาชอบ
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">ไม่พบข้อมูลรูปแบบการซื้อรายบุคคล</td></tr>';
+                }
+            } catch (e) { console.error("Fetch Personal Patterns Error:", e); }
+        }
+
+        function sendPersonalNotification(customerName, prefDay, prefHour, favItem) {
+            alert(`📲 [ส่งข้อความบรอดแคสต์เรียบร้อย]\nข้อความถึงคุณ ${customerName}: "วัน${prefDay}ช่วงเวลา ${prefHour} รับ ${favItem} สักแก้ว/ชิ้นไหมครับ? กดรับส่วนลดพิเศษได้ในแอปเลย!"`);
+        }
+
+        // --- AI RECOMMENDATIONS LOGIC ---
+        async function loadAIRecommendations() {
+            try {
+                const res = await fetch(`/api/v1/analytics/promo-recommendations?_t=${Date.now()}`);
+                if (!res.ok) return;
+                const data = await res.json();
+                
+                const promoContainer = document.getElementById('ai-recommendations-list');
+                const dashContainer = document.getElementById('dash-ai-recommendations-list');
+                const recCountEl = document.getElementById('promo-ai-rec-count');
+
+                if (data.status === 'success' && data.recommendations.length > 0) {
+                    if (recCountEl) recCountEl.innerText = `${data.recommendations.length} รายการ`;
+                    
+                    let htmlContent = '';
+                    data.recommendations.forEach(rec => {
+                        htmlContent += `
+                            <div class="col-md-6">
+                                <div class="p-3 rounded-4 border bg-white h-100 d-flex flex-column justify-content-between shadow-sm">
+                                    <div>
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <span class="badge bg-primary-subtle text-primary fw-bold px-2 py-1">${rec.promo_type}</span>
+                                            <span class="fw-bold text-success fs-6">${rec.discount_text}</span>
+                                        </div>
+                                        <h6 class="fw-bold text-dark mb-1">${rec.title}</h6>
+                                        <p class="small text-muted mb-2">📌 <strong>เงื่อนไข:</strong> ${rec.condition_summary}</p>
+                                        <p class="small text-secondary italic mb-3">💡 <i>${rec.reason}</i></p>
+                                    </div>
+                                    <button class="btn btn-sm btn-primary rounded-pill w-100 py-2 fw-semibold" 
+                                            onclick="applyAIRecommendation('${rec.title}', '${rec.promo_type}', '${rec.discount_text}', '${rec.condition_summary}')">
+                                        ⚡ สร้างโปรโมชันนี้ทันที
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    if (promoContainer) promoContainer.innerHTML = htmlContent;
+                    if (dashContainer) dashContainer.innerHTML = htmlContent;
+                } else {
+                    if (recCountEl) recCountEl.innerText = '0 รายการ';
+                    if (promoContainer) promoContainer.innerHTML = '<div class="col-12 text-center py-3 text-muted">ยังไม่มีข้อเสนอแนะนำในขณะนี้</div>';
+                    if (dashContainer) dashContainer.innerHTML = '<div class="col-12 text-center py-2 text-muted">ยังไม่มีข้อเสนอแนะนำในขณะนี้</div>';
+                }
+            } catch (e) {
+                console.error("Load AI Rec Error:", e);
+            }
+        }
+
+        async function applyAIRecommendation(title, promo_type, discount_text, condition_summary) {
+            const today = new Date().toISOString().split('T')[0];
+            const nextMonth = new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0];
+
+            const payload = {
+                title: title,
+                promo_type: promo_type,
+                discount_text: discount_text,
+                condition_summary: condition_summary,
+                start_date: today,
+                end_date: nextMonth
+            };
+
+            try {
+                const res = await fetch('/api/v1/admin/promotions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    alert('🎉 สร้างและเปิดใช้งานโปรโมชันที่ AI แนะนำเข้าสู่ระบบเรียบร้อยแล้ว!');
+                    switchTab('promotions');
+                    fetchPromotions();
+                } else {
+                    alert('ไม่สามารถสร้างโปรโมชันได้');
+                }
+            } catch (err) {
+                alert('เกิดข้อผิดพลาดในการสร้างโปรโมชัน');
+            }
+        }
+
         async function fetchPromotions() {
             try {
-                const res = await fetch('/api/v1/admin/promotions');
+                const res = await fetch(`/api/v1/admin/promotions?_t=${Date.now()}`);
                 if (!res.ok) return;
                 const promos = await res.json();
                 const tbody = document.getElementById('promotions-tbody');
@@ -939,7 +1216,7 @@
                     if (p.is_active) activeCount++;
                     totalUsed += (p.usage_count || 0);
                     let typeBadge = '<span class="badge bg-primary">Bundle Deal</span>';
-                    if (p.promo_type === 'cross_sell') typeBadge = '<span class="badge bg-info text-dark">Cross-Selling</span>';
+                    if (p.promo_type === 'cross_sell' || p.promo_type === 'Cross-Selling') typeBadge = '<span class="badge bg-info text-dark">Cross-Selling</span>';
                     if (p.promo_type === 'discount_code') typeBadge = '<span class="badge bg-purple">Coupon Code</span>';
                     tbody.innerHTML += `
                         <tr>
@@ -961,8 +1238,10 @@
                         </tr>
                     `;
                 });
-                document.getElementById('promo-active-count').innerText = `${activeCount} แคมเปญ`;
-                document.getElementById('promo-total-used').innerText = `${totalUsed} ครั้ง`;
+                const actEl = document.getElementById('promo-active-count');
+                const usedEl = document.getElementById('promo-total-used');
+                if (actEl) actEl.innerText = `${activeCount} แคมเปญ`;
+                if (usedEl) usedEl.innerText = `${totalUsed} ครั้ง`;
             } catch (e) { console.error("Fetch Promo Error:", e); }
         }
 
@@ -1117,6 +1396,7 @@
 
         function openRevenueModal() { if (revenueModalObj) revenueModalObj.show(); }
         function openLowStockModal() { if (lowStockModalObj) lowStockModalObj.show(); }
+
         function getBadgeClass(status) {
             switch(status) {
                 case 'Pending': return 'badge-pending';
@@ -1182,14 +1462,14 @@
                         const topHour = sortedPeak[0];
                         const topRevenue = topHour.total_revenue || topHour.sales || 0;
                         const hourLabel = topHour.hour || topHour.time || `${topHour.hour_slot}:00`;
-                        if (topRevenue > 0) {
-                            document.getElementById('peak-hours-summary').innerHTML = 
-                                `ช่วงเวลาที่มียอดขายสูงสุดคือช่วง <strong>${hourLabel} น.</strong> มียอดขายรวม <strong>${topRevenue.toFixed(2)} บาท</strong>`;
-                        } else {
-                            document.getElementById('peak-hours-summary').innerText = 'ยังไม่มีข้อมูลยอดขายในช่วงเวลานี้';
+                        const sumEl1 = document.getElementById('peak-hours-summary');
+                        if (sumEl1) {
+                            if (topRevenue > 0) {
+                                sumEl1.innerHTML = `ช่วงเวลาที่มียอดขายสูงสุดคือช่วง <strong>${hourLabel} น.</strong> มียอดขายรวม <strong>${topRevenue.toFixed(2)} บาท</strong>`;
+                            } else {
+                                sumEl1.innerText = 'ยังไม่มีข้อมูลยอดขายในช่วงเวลานี้';
+                            }
                         }
-                    } else {
-                        document.getElementById('peak-hours-summary').innerText = 'ไม่พบข้อมูล Peak Hours';
                     }
                 }
                 // 2. ABC Analysis
@@ -1219,15 +1499,15 @@
                         const totalRevenueAll = abcData.reduce((sum, item) => sum + (item.revenue || item.total || 0), 0);
                         const topProduct = abcData[0];
                         const topRev = topProduct.revenue || topProduct.total || 0;
-                        if (totalRevenueAll > 0 && topProduct) {
-                            const percent = ((topRev / totalRevenueAll) * 100).toFixed(1);
-                            document.getElementById('abc-summary').innerHTML = 
-                                `สินค้าสร้างรายได้หลักอันดับ 1 คือ <strong>${topProduct.product_name || topProduct.name}</strong> คิดเป็น <strong>${percent}%</strong> ของรายได้ทั้งหมด`;
-                        } else {
-                            document.getElementById('abc-summary').innerText = 'ยังไม่มีข้อมูลสัดส่วนรายได้สินค้า';
+                        const sumEl2 = document.getElementById('abc-summary');
+                        if (sumEl2) {
+                            if (totalRevenueAll > 0 && topProduct) {
+                                const percent = ((topRev / totalRevenueAll) * 100).toFixed(1);
+                                sumEl2.innerHTML = `สินค้าสร้างรายได้หลักอันดับ 1 คือ <strong>${topProduct.product_name || topProduct.name}</strong> คิดเป็น <strong>${percent}%</strong> ของรายได้ทั้งหมด`;
+                            } else {
+                                sumEl2.innerText = 'ยังไม่มีข้อมูลสัดส่วนรายได้สินค้า';
+                            }
                         }
-                    } else {
-                        document.getElementById('abc-summary').innerText = 'ไม่พบข้อมูลจัดกลุ่มรายได้';
                     }
                 }
                 // 3. Market Basket Analysis
