@@ -8,18 +8,30 @@ from itertools import combinations
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
+
+# --- FIREBASE ADMIN SDK INTEGRATION ---
+import firebase_admin
+from firebase_admin import credentials, messaging as firebase_messaging
+
+# โหลดคีย์ Firebase Service Account
+if os.path.exists("firebase-key.json"):
+    try:
+        cred = credentials.Certificate("firebase-key.json")
+        firebase_admin.initialize_app(cred)
+        print("✅ Firebase Admin SDK Initialized Successfully!")
+    except Exception as e:
+        print(f"⚠️ Firebase Initialization Error: {e}")
+else:
+    print("⚠️ Warning: firebase-key.json not found. Running in mock / local storage mode.")
 
 app = FastAPI(
     title="SmartSales Enterprise API",
-    description="ระบบบริหารจัดการร้านค้า สต็อกสินค้า ระบบหลังบ้าน และ Real-Data Analytics (ROP, Market Basket, RFM, Churn Risk & Personal Patterns)",
-    version="2.3.0"
+    description="ระบบบริหารจัดการร้านค้า สต็อกสินค้า ระบบหลังบ้าน Real-Data Analytics และ Firebase Push Notifications",
+    version="2.5.0"
 )
 
-# ----------------------------------------------------
-# 1. ตั้งค่า CORS
-# ----------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -29,25 +41,14 @@ app.add_middleware(
 )
 
 # ----------------------------------------------------
-# 2. ฐานข้อมูลเริ่มต้น (In-Memory / Dynamic Storage)
+# ฐานข้อมูลเริ่มต้น และ FCM Token Storage
 # ----------------------------------------------------
+customer_fcm_tokens = {}  # Key: customer_name, Value: fcm_token
+
 users_db = [
-    {
-        "user_id": 1,
-        "full_name": "ผู้ดูแลระบบ",
-        "email": "admin@example.com",
-        "phone": "0800000000",
-        "password": "admin",
-        "role": "admin"
-    },
-    {
-        "user_id": 2,
-        "full_name": "สมชาย สายเปย์",
-        "email": "user@example.com",
-        "phone": "0812345678",
-        "password": "123",
-        "role": "customer"
-    }
+    {"user_id": 1, "full_name": "ผู้ดูแลระบบ", "email": "admin@example.com", "phone": "0800000000", "password": "admin", "role": "admin"},
+    {"user_id": 2, "full_name": "สมชาย สายเปย์", "email": "user@example.com", "phone": "0812345678", "password": "123", "role": "customer"},
+    {"user_id": 3, "full_name": "สมหญิง รักสงบ", "email": "somying@example.com", "phone": "0898765432", "password": "123", "role": "customer"}
 ]
 
 products_db = [
@@ -107,17 +108,6 @@ orders_db = [
             {"product_name": "อเมริกาโน่เย็น (Iced Americano)", "quantity": 1, "subtotal": 55.0, "image_url": "https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=300"},
             {"product_name": "ครัวซองต์เนยสด (Croissant)", "quantity": 1, "subtotal": 45.0, "image_url": "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=300"}
         ]
-    },
-    {
-        "sale_id": 1003,
-        "customer_name": "สมชาย สายเปย์",
-        "timestamp": "2026-10-12 08:45:00",
-        "payment_method": "PromptPay",
-        "total_amount": 55.0,
-        "status": "Paid",
-        "items": [
-            {"product_name": "อเมริกาโน่เย็น (Iced Americano)", "quantity": 1, "subtotal": 55.0, "image_url": "https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=300"}
-        ]
     }
 ]
 
@@ -136,8 +126,17 @@ promotions_db = [
 ]
 
 # ----------------------------------------------------
-# 3. Schemas
+# Schemas
 # ----------------------------------------------------
+class RegisterFCMTokenSchema(BaseModel):
+    customer_name: str
+    fcm_token: str
+
+class SendPushNotificationSchema(BaseModel):
+    customer_name: str
+    title: str
+    message: str
+
 class LoginSchema(BaseModel):
     email: str
     password: str
@@ -165,8 +164,14 @@ class WinBackCouponSchema(BaseModel):
     discount_amount: float
 
 # ----------------------------------------------------
-# 4. Page Shortcut Routes
+# Page Shortcut Routes
 # ----------------------------------------------------
+@app.get("/")
+def route_index_page():
+    if os.path.exists("static/index.html"):
+        return FileResponse("static/index.html")
+    raise HTTPException(status_code=404, detail="ไม่พบไฟล์ static/index.html")
+
 @app.get("/admin")
 def route_admin_page():
     if os.path.exists("static/admin.html"):
@@ -186,30 +191,52 @@ def route_register_page():
     raise HTTPException(status_code=404, detail="ไม่พบไฟล์ static/register.html")
 
 # ----------------------------------------------------
-# 5. API Endpoints
+# API Endpoints
 # ----------------------------------------------------
+
+# --- FIREBASE PUSH NOTIFICATION ENDPOINTS ---
+@app.post("/api/v1/notifications/register-token")
+def register_fcm_token(data: RegisterFCMTokenSchema):
+    customer_fcm_tokens[data.customer_name] = data.fcm_token
+    print(f"📱 บันทึก FCM Token สำหรับคุณ {data.customer_name}: {data.fcm_token[:20]}...")
+    return {"status": "success", "message": f"ลงทะเบียนรับการแจ้งเตือนสำหรับคุณ {data.customer_name} สำเร็จ"}
+
+@app.post("/api/v1/notifications/send-push")
+def send_push_notification(data: SendPushNotificationSchema):
+    token = customer_fcm_tokens.get(data.customer_name)
+    if not token:
+        return {
+            "status": "warning", 
+            "message": f"ยังไม่พบ Device Token ของคุณ {data.customer_name} (ลูกค้าอาจยังไม่ได้ยอมรับ Notification บนเบราวเซอร์)"
+        }
+    
+    try:
+        if firebase_admin._apps:
+            message = firebase_messaging.Message(
+                notification=firebase_messaging.Notification(
+                    title=data.title,
+                    body=data.message
+                ),
+                token=token
+            )
+            response = firebase_messaging.send(message)
+            return {"status": "success", "message_id": response, "details": f"ส่ง Push Notification หาคุณ {data.customer_name} สำเร็จ!"}
+        else:
+            return {"status": "success", "details": f"[MOCK PUSH] ส่งการแจ้งเตือนหาคุณ {data.customer_name}: {data.message}"}
+    except Exception as e:
+        return {"status": "error", "message": f"ไม่สามารถส่งการแจ้งเตือนได้: {str(e)}"}
 
 # --- AUTHENTICATION ---
 @app.post("/api/v1/auth/login")
 def login(data: LoginSchema):
     if data.role == "admin" or data.email == "admin@example.com":
         if data.password in ["admin", "1234"]:
-            return {
-                "status": "success",
-                "role": "admin",
-                "name": "ผู้ดูแลระบบ",
-                "token": "admin-secret-token"
-            }
+            return {"status": "success", "role": "admin", "name": "ผู้ดูแลระบบ", "token": "admin-secret-token"}
         raise HTTPException(status_code=401, detail="รหัสผ่านผู้ดูแลระบบไม่ถูกต้อง")
     
     user = next((u for u in users_db if u["email"] == data.email and u["password"] == data.password), None)
     if user:
-        return {
-            "status": "success",
-            "role": user["role"],
-            "name": user["full_name"],
-            "token": f"user-token-{user['user_id']}"
-        }
+        return {"status": "success", "role": user["role"], "name": user["full_name"], "token": f"user-token-{user['user_id']}"}
     
     raise HTTPException(status_code=401, detail="อีเมลหรือรหัสผ่านไม่ถูกต้อง")
 
@@ -226,11 +253,7 @@ def register(data: RegisterSchema):
         "role": "customer"
     }
     users_db.append(new_user)
-    return {
-        "status": "success",
-        "message": "สมัครสมาชิกเรียบร้อยแล้ว",
-        "user_id": new_user["user_id"]
-    }
+    return {"status": "success", "message": "สมัครสมาชิกเรียบร้อยแล้ว", "user_id": new_user["user_id"]}
 
 # --- CHECKOUT & ORDERS HANDLER ---
 @app.post("/api/v1/pos/checkout")
@@ -287,12 +310,7 @@ async def create_order(request: Request):
         "items": processed_items
     }
     orders_db.insert(0, new_order)
-    return {
-        "status": "success",
-        "message": "สั่งซื้อสำเร็จเรียบร้อยแล้ว",
-        "sale_id": sale_id,
-        "total_amount": round(total_amount, 2)
-    }
+    return {"status": "success", "message": "สั่งซื้อสำเร็จเรียบร้อยแล้ว", "sale_id": sale_id, "total_amount": round(total_amount, 2)}
 
 # --- PRODUCTS MANAGEMENT ---
 @app.get("/api/v1/products")
@@ -489,7 +507,6 @@ def get_market_basket(min_support: float = 0.01, min_confidence: float = 0.01):
 @app.get("/api/v1/analytics/reorder-points")
 def get_reorder_points():
     valid_orders = [o for o in orders_db if o.get("status") in ["Paid", "Completed"]]
-    
     product_sales_qty = defaultdict(int)
     for order in valid_orders:
         for item in order.get("items", []):
@@ -503,7 +520,6 @@ def get_reorder_points():
     for p in products_db:
         p_name = p["product_name"]
         total_sold = product_sales_qty.get(p_name, 0)
-        
         daily_usage = round(max(1.0, total_sold / days_evaluated), 1)
         lead_time = p.get("lead_time_days", 3)
         safety = p.get("safety_stock", 10)
@@ -529,14 +545,12 @@ def get_reorder_points():
 def get_rfm_analysis():
     now = datetime.now() + timedelta(hours=7)
     valid_orders = [o for o in orders_db if o.get("status") in ["Paid", "Completed"]]
-    
     customer_stats = defaultdict(lambda: {"last_date": None, "frequency": 0, "monetary": 0.0})
     
     for order in valid_orders:
         c_name = order.get("customer_name") or "ลูกค้าทั่วไป"
         amount = float(order.get("total_amount", 0.0))
         ts_str = order.get("timestamp")
-        
         try:
             dt = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
         except Exception:
@@ -547,6 +561,7 @@ def get_rfm_analysis():
         stats["monetary"] += amount
         if stats["last_date"] is None or dt > stats["last_date"]:
             stats["last_date"] = dt
+
     rfm_results = []
     for c_name, stats in customer_stats.items():
         recency_days = (now - stats["last_date"]).days if stats["last_date"] else 0
@@ -579,13 +594,13 @@ def get_rfm_analysis():
         
     return {"status": "success", "rfm_data": rfm_results}
 
-# --- NEW FEATURE 1: CUSTOMER CHURN RISK & WIN-BACK ---
+# --- CHURN RISK ANALYSIS ---
 @app.get("/api/v1/analytics/churn-risk")
 def get_churn_risk_analysis():
     now = datetime.now() + timedelta(hours=7)
     valid_orders = [o for o in orders_db if o.get("status") in ["Paid", "Completed"]]
-    
     customer_history = defaultdict(list)
+    
     for order in valid_orders:
         c_name = order.get("customer_name") or "ลูกค้าทั่วไป"
         if c_name == "ลูกค้าทั่วไป":
@@ -609,9 +624,8 @@ def get_churn_risk_analysis():
             total_span_days = max(1, (last_date - first_date).days)
             avg_interval_days = round(total_span_days / (total_orders - 1), 1)
         else:
-            avg_interval_days = 7.0  # ค่าตั้งต้นความถี่มาตรฐานสำหรับซื้อครั้งเดียว
+            avg_interval_days = 7.0
 
-        # คำนวณความเสี่ยง: หากจำนวนวันไม่ได้ซื้อ เกิน 2 เท่าของรอบปกติ ถือเป็นความเสี่ยงสูง
         risk_threshold = max(7, avg_interval_days * 2)
         if recency_days > risk_threshold:
             risk_level = "Critical (เสี่ยงสูงมาก)"
@@ -632,11 +646,10 @@ def get_churn_risk_analysis():
     churn_results.sort(key=lambda x: x["recency_days"], reverse=True)
     return {"status": "success", "churn_data": churn_results}
 
-# --- NEW FEATURE 2: PERSONAL SHOPPING PATTERNS & TIME PREFERENCES ---
+# --- PERSONAL SHOPPING PATTERNS ANALYSIS ---
 @app.get("/api/v1/analytics/personal-patterns")
 def get_personal_patterns():
     valid_orders = [o for o in orders_db if o.get("status") in ["Paid", "Completed"]]
-    
     days_th = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์", "อาทิตย์"]
     customer_patterns = defaultdict(lambda: {
         "day_counts": defaultdict(int),
@@ -679,11 +692,10 @@ def get_personal_patterns():
 
     return {"status": "success", "patterns": pattern_results}
 
-# --- AI PROMOTION RECOMMENDATIONS (จับคู่สินค้าขายดี + สินค้าขายช้า) ---
+# --- AI PROMOTION RECOMMENDATIONS ---
 @app.get("/api/v1/analytics/promo-recommendations")
 def get_promo_recommendations():
     valid_orders = [o for o in orders_db if o.get("status") in ["Paid", "Completed"]]
-    
     product_sales = defaultdict(int)
     for order in valid_orders:
         for item in order.get("items", []):
@@ -709,7 +721,6 @@ def get_promo_recommendations():
     if len(sorted_products) >= 2:
         top_product = sorted_products[0]
         slow_product = sorted_products[-1]
-
         recommended_discount = round((top_product["selling_price"] + slow_product["selling_price"]) * 0.15, -1)
         if recommended_discount < 10: recommended_discount = 10
 
@@ -725,7 +736,6 @@ def get_promo_recommendations():
     if len(sorted_products) >= 3:
         second_top = sorted_products[1]
         slow_product = sorted_products[-1]
-
         recommended_discount_2 = round((second_top["selling_price"] + slow_product["selling_price"]) * 0.10, -1)
         if recommended_discount_2 < 10: recommended_discount_2 = 10
 
@@ -796,9 +806,7 @@ def delete_promotion(promo_id: int):
     promotions_db = [p for p in promotions_db if p["promo_id"] != promo_id]
     return {"status": "success"}
 
-# ----------------------------------------------------
-# 6. Static Files Mount (วางไว้ล่างสุด)
-# ----------------------------------------------------
+# --- STATIC FILES MOUNT ---
 if not os.path.exists("static"):
     os.makedirs("static")
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
