@@ -13,8 +13,8 @@ from pydantic import BaseModel
 
 app = FastAPI(
     title="SmartSales Enterprise API",
-    description="ระบบบริหารจัดการร้านค้า สต็อกสินค้า ระบบหลังบ้าน และ Real-Data Analytics (ROP, Market Basket, RFM)",
-    version="2.1.0"
+    description="ระบบบริหารจัดการร้านค้า สต็อกสินค้า ระบบหลังบ้าน และ Real-Data Analytics (ROP, Market Basket, RFM, Churn Risk & Personal Patterns)",
+    version="2.3.0"
 )
 
 # ----------------------------------------------------
@@ -87,7 +87,7 @@ orders_db = [
     {
         "sale_id": 1001,
         "customer_name": "สมชาย สายเปย์",
-        "timestamp": "2026-10-08 18:30:15",
+        "timestamp": "2026-10-08 08:30:15",
         "payment_method": "PromptPay",
         "total_amount": 120.0,
         "status": "Paid",
@@ -99,13 +99,24 @@ orders_db = [
     {
         "sale_id": 1002,
         "customer_name": "สมหญิง รักสงบ",
-        "timestamp": "2026-10-10 19:15:00",
+        "timestamp": "2026-09-20 14:15:00",
         "payment_method": "PromptPay",
         "total_amount": 100.0,
         "status": "Paid",
         "items": [
             {"product_name": "อเมริกาโน่เย็น (Iced Americano)", "quantity": 1, "subtotal": 55.0, "image_url": "https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=300"},
             {"product_name": "ครัวซองต์เนยสด (Croissant)", "quantity": 1, "subtotal": 45.0, "image_url": "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=300"}
+        ]
+    },
+    {
+        "sale_id": 1003,
+        "customer_name": "สมชาย สายเปย์",
+        "timestamp": "2026-10-12 08:45:00",
+        "payment_method": "PromptPay",
+        "total_amount": 55.0,
+        "status": "Paid",
+        "items": [
+            {"product_name": "อเมริกาโน่เย็น (Iced Americano)", "quantity": 1, "subtotal": 55.0, "image_url": "https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=300"}
         ]
     }
 ]
@@ -148,6 +159,10 @@ class PromotionSchema(BaseModel):
     condition_summary: str
     start_date: str
     end_date: str
+
+class WinBackCouponSchema(BaseModel):
+    customer_name: str
+    discount_amount: float
 
 # ----------------------------------------------------
 # 4. Page Shortcut Routes
@@ -433,7 +448,7 @@ def get_abc_analysis():
     result = [{"product_name": name, "revenue": round(rev, 2)} for name, rev in summary.items()]
     return result or [{"product_name": "ยังไม่มีข้อมูลการขาย", "revenue": 0.0}]
 
-# --- 1. REAL-DATA MARKET BASKET ANALYSIS ---
+# --- REAL-DATA MARKET BASKET ANALYSIS ---
 @app.get("/api/v1/analytics/market-basket")
 def get_market_basket(min_support: float = 0.01, min_confidence: float = 0.01):
     valid_orders = [o for o in orders_db if o.get("status") in ["Paid", "Completed"]]
@@ -470,7 +485,7 @@ def get_market_basket(min_support: float = 0.01, min_confidence: float = 0.01):
     rules = sorted(rules, key=lambda x: x["lift"], reverse=True)
     return {"status": "success", "rules": rules}
 
-# --- 2. REAL-DATA REORDER POINT (ROP) ANALYSIS ---
+# --- REAL-DATA REORDER POINT (ROP) ANALYSIS ---
 @app.get("/api/v1/analytics/reorder-points")
 def get_reorder_points():
     valid_orders = [o for o in orders_db if o.get("status") in ["Paid", "Completed"]]
@@ -509,7 +524,7 @@ def get_reorder_points():
         })
     return {"status": "success", "reorder_points": results}
 
-# --- 3. REAL-DATA RFM ANALYSIS ---
+# --- REAL-DATA RFM ANALYSIS ---
 @app.get("/api/v1/analytics/rfm")
 def get_rfm_analysis():
     now = datetime.now() + timedelta(hours=7)
@@ -564,12 +579,111 @@ def get_rfm_analysis():
         
     return {"status": "success", "rfm_data": rfm_results}
 
-# --- 4. AI PROMOTION RECOMMENDATIONS (จับคู่สินค้าขายดี + สินค้าขายช้า) ---
+# --- NEW FEATURE 1: CUSTOMER CHURN RISK & WIN-BACK ---
+@app.get("/api/v1/analytics/churn-risk")
+def get_churn_risk_analysis():
+    now = datetime.now() + timedelta(hours=7)
+    valid_orders = [o for o in orders_db if o.get("status") in ["Paid", "Completed"]]
+    
+    customer_history = defaultdict(list)
+    for order in valid_orders:
+        c_name = order.get("customer_name") or "ลูกค้าทั่วไป"
+        if c_name == "ลูกค้าทั่วไป":
+            continue
+        ts_str = order.get("timestamp")
+        try:
+            dt = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
+            customer_history[c_name].append(dt)
+        except Exception:
+            pass
+
+    churn_results = []
+    for c_name, dates in customer_history.items():
+        dates.sort()
+        last_date = dates[-1]
+        recency_days = (now - last_date).days
+        total_orders = len(dates)
+        
+        if total_orders >= 2:
+            first_date = dates[0]
+            total_span_days = max(1, (last_date - first_date).days)
+            avg_interval_days = round(total_span_days / (total_orders - 1), 1)
+        else:
+            avg_interval_days = 7.0  # ค่าตั้งต้นความถี่มาตรฐานสำหรับซื้อครั้งเดียว
+
+        # คำนวณความเสี่ยง: หากจำนวนวันไม่ได้ซื้อ เกิน 2 เท่าของรอบปกติ ถือเป็นความเสี่ยงสูง
+        risk_threshold = max(7, avg_interval_days * 2)
+        if recency_days > risk_threshold:
+            risk_level = "Critical (เสี่ยงสูงมาก)"
+        elif recency_days > avg_interval_days * 1.3:
+            risk_level = "Warning (เริ่มขาดการติดต่อ)"
+        else:
+            risk_level = "Normal (ปกติ)"
+
+        churn_results.append({
+            "customer_name": c_name,
+            "total_orders": total_orders,
+            "avg_interval_days": avg_interval_days,
+            "recency_days": recency_days,
+            "risk_threshold": risk_threshold,
+            "risk_level": risk_level
+        })
+    
+    churn_results.sort(key=lambda x: x["recency_days"], reverse=True)
+    return {"status": "success", "churn_data": churn_results}
+
+# --- NEW FEATURE 2: PERSONAL SHOPPING PATTERNS & TIME PREFERENCES ---
+@app.get("/api/v1/analytics/personal-patterns")
+def get_personal_patterns():
+    valid_orders = [o for o in orders_db if o.get("status") in ["Paid", "Completed"]]
+    
+    days_th = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์", "อาทิตย์"]
+    customer_patterns = defaultdict(lambda: {
+        "day_counts": defaultdict(int),
+        "hour_counts": defaultdict(int),
+        "favorite_items": defaultdict(int)
+    })
+    
+    for order in valid_orders:
+        c_name = order.get("customer_name") or "ลูกค้าทั่วไป"
+        if c_name == "ลูกค้าทั่วไป":
+            continue
+        ts_str = order.get("timestamp")
+        try:
+            dt = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
+            day_name = days_th[dt.weekday()]
+            hour_slot = f"{dt.hour:02d}:00 - {dt.hour+1:02d}:00 น."
+            
+            customer_patterns[c_name]["day_counts"][day_name] += 1
+            customer_patterns[c_name]["hour_counts"][hour_slot] += 1
+            
+            for item in order.get("items", []):
+                p_name = item.get("product_name")
+                if p_name:
+                    customer_patterns[c_name]["favorite_items"][p_name] += item.get("quantity", 1)
+        except Exception:
+            pass
+
+    pattern_results = []
+    for c_name, data in customer_patterns.items():
+        pref_day = max(data["day_counts"].items(), key=lambda x: x[1])[0] if data["day_counts"] else "ไม่ระบุ"
+        pref_hour = max(data["hour_counts"].items(), key=lambda x: x[1])[0] if data["hour_counts"] else "ไม่ระบุ"
+        pref_item = max(data["favorite_items"].items(), key=lambda x: x[1])[0] if data["favorite_items"] else "ไม่ระบุ"
+        
+        pattern_results.append({
+            "customer_name": c_name,
+            "preferred_day": pref_day,
+            "preferred_hour": pref_hour,
+            "favorite_item": pref_item
+        })
+
+    return {"status": "success", "patterns": pattern_results}
+
+# --- AI PROMOTION RECOMMENDATIONS (จับคู่สินค้าขายดี + สินค้าขายช้า) ---
 @app.get("/api/v1/analytics/promo-recommendations")
 def get_promo_recommendations():
     valid_orders = [o for o in orders_db if o.get("status") in ["Paid", "Completed"]]
     
-    # 1. คำนวณยอดขายชิ้นรวมของสินค้าแต่ละชนิด
     product_sales = defaultdict(int)
     for order in valid_orders:
         for item in order.get("items", []):
@@ -578,7 +692,6 @@ def get_promo_recommendations():
             if p_name:
                 product_sales[p_name] += qty
 
-    # นำรายการสินค้าทั้งหมดมาเรียงลำดับยอดขาย
     sorted_products = []
     for p in products_db:
         p_name = p["product_name"]
@@ -590,14 +703,12 @@ def get_promo_recommendations():
             "sold_qty": sold_qty
         })
     
-    # เรียงจากขายดีสุดไปขายช้าสุด
     sorted_products.sort(key=lambda x: x["sold_qty"], reverse=True)
     recommendations = []
     
-    # 2. จับคู่กรณีมีสินค้าตั้งแต่ 2 รายการขึ้นไป (รองรับร้านที่มีสินค้าน้อย)
     if len(sorted_products) >= 2:
-        top_product = sorted_products[0]      # สินค้าขายดีอันดับ 1
-        slow_product = sorted_products[-1]    # สินค้าขายช้าที่สุด
+        top_product = sorted_products[0]
+        slow_product = sorted_products[-1]
 
         recommended_discount = round((top_product["selling_price"] + slow_product["selling_price"]) * 0.15, -1)
         if recommended_discount < 10: recommended_discount = 10
@@ -612,8 +723,8 @@ def get_promo_recommendations():
         })
 
     if len(sorted_products) >= 3:
-        second_top = sorted_products[1]       # สินค้าขายดีอันดับ 2
-        slow_product = sorted_products[-1]    # สินค้าขายช้าที่สุด
+        second_top = sorted_products[1]
+        slow_product = sorted_products[-1]
 
         recommended_discount_2 = round((second_top["selling_price"] + slow_product["selling_price"]) * 0.10, -1)
         if recommended_discount_2 < 10: recommended_discount_2 = 10
@@ -624,20 +735,7 @@ def get_promo_recommendations():
             "promo_type": "Cross-Selling",
             "condition_summary": f"{second_top['product_name']} + {slow_product['product_name']}",
             "discount_text": f"ซื้อคู่กันลด {int(recommended_discount_2)} บาท",
-            "reason": f"ช่วยดันยอดขาย {slow_product['product_name']} (ขายได้เพียง {slow_product['sold_qty']} ชิ้น) โดยพ่วงกับ {second_top['product_name']}"
-        })
-
-    # Fallback Mechanism: ป้องกันกรณีไม่มีข้อมูลการขาย
-    if not recommendations and len(products_db) >= 2:
-        p1 = products_db[0]
-        p2 = products_db[1]
-        recommendations.append({
-            "rec_id": 99,
-            "title": f"เซ็ตคู่สุดคุ้มประจำเดือน: {p1['product_name']} + {p2['product_name']}",
-            "promo_type": "Bundle Deal",
-            "condition_summary": f"{p1['product_name']} + {p2['product_name']}",
-            "discount_text": "ซื้อคู่กันลด 15 บาท",
-            "reason": "จับคู่สินค้าแนะนำอัตโนมัติประจำเดือนเพื่อกระตุ้นยอดขาย"
+            "reason": f"ช่วยดันยอดขาย {slow_product['product_name']} (ขายได้ {slow_product['sold_qty']} ชิ้น) โดยพ่วงกับ {second_top['product_name']}"
         })
 
     return {"status": "success", "recommendations": recommendations}
@@ -663,6 +761,26 @@ def create_promotion(promo: PromotionSchema):
     }
     promotions_db.insert(0, new_promo)
     return {"status": "success", "promotion": new_promo}
+
+@app.post("/api/v1/admin/promotions/win-back")
+def create_win_back_coupon(data: WinBackCouponSchema):
+    new_id = len(promotions_db) + 1
+    today = datetime.now().strftime("%Y-%m-%d")
+    next_month = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+    
+    new_promo = {
+        "promo_id": new_id,
+        "title": f"คูปองต้อนรับกลับสำหรับคุณ {data.customer_name}",
+        "promo_type": "discount_code",
+        "discount_text": f"รับส่วนลดทันที {int(data.discount_amount)} บาท",
+        "condition_summary": f"สิทธิ์เฉพาะคุณ {data.customer_name}",
+        "usage_count": 0,
+        "is_active": True,
+        "start_date": today,
+        "end_date": next_month
+    }
+    promotions_db.insert(0, new_promo)
+    return {"status": "success", "message": f"ส่งคูปองง้อลูกค้าให้คุณ {data.customer_name} เรียบร้อยแล้ว", "promotion": new_promo}
 
 @app.patch("/api/v1/admin/promotions/{promo_id}/toggle")
 def toggle_promotion_status(promo_id: int):
