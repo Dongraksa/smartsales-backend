@@ -16,18 +16,24 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
-            --bs-primary: #31566f;
-            --bs-primary-rgb: 49, 86, 111;
-            --admin-page: #f2f4f6;
+            --bs-primary: #2563eb;
+            --bs-primary-rgb: 37, 99, 235;
+            --bs-success: #23835f;
+            --bs-success-rgb: 35, 131, 95;
+            --bs-warning: #b7791f;
+            --bs-warning-rgb: 183, 121, 31;
+            --bs-danger: #b64950;
+            --bs-danger-rgb: 182, 73, 80;
+            --admin-page: #f4f7fa;
             --admin-surface: #ffffff;
-            --admin-text: #263442;
-            --admin-muted: #687582;
-            --admin-border: #d9dfe5;
-            --admin-sidebar: #243746;
-            --admin-sidebar-active: #3b627b;
-            --admin-success: #287653;
-            --admin-warning: #9a6b18;
-            --admin-danger: #a74343;
+            --admin-text: #243445;
+            --admin-muted: #647487;
+            --admin-border: #d8e0e8;
+            --admin-sidebar: #1d3042;
+            --admin-sidebar-active: #2563eb;
+            --admin-success: #23835f;
+            --admin-warning: #a96d16;
+            --admin-danger: #b64950;
         }
 
         * { font-family: 'Sarabun', sans-serif; }
@@ -50,6 +56,9 @@
         .sidebar .nav-link:hover, .sidebar .nav-link.active {
             background-color: var(--admin-sidebar-active);
             color: white;
+        }
+        .sidebar .nav-link.active {
+            box-shadow: inset 3px 0 0 #8db9ff;
         }
         .card-custom {
             border: 1px solid var(--admin-border);
@@ -88,26 +97,26 @@
             box-shadow: 0 0 0 0.18rem rgba(49, 86, 111, 0.14);
         }
         .btn-primary {
-            --bs-btn-bg: #31566f;
-            --bs-btn-border-color: #31566f;
-            --bs-btn-hover-bg: #29485d;
-            --bs-btn-hover-border-color: #29485d;
-            --bs-btn-active-bg: #223f52;
-            --bs-btn-active-border-color: #223f52;
+            --bs-btn-bg: #2563eb;
+            --bs-btn-border-color: #2563eb;
+            --bs-btn-hover-bg: #1f55cc;
+            --bs-btn-hover-border-color: #1f55cc;
+            --bs-btn-active-bg: #1b49b2;
+            --bs-btn-active-border-color: #1b49b2;
         }
         .btn-outline-primary {
-            --bs-btn-color: #31566f;
-            --bs-btn-border-color: #8799a6;
-            --bs-btn-hover-bg: #31566f;
-            --bs-btn-hover-border-color: #31566f;
-            --bs-btn-active-bg: #31566f;
-            --bs-btn-active-border-color: #31566f;
+            --bs-btn-color: #2563eb;
+            --bs-btn-border-color: #9bb9f5;
+            --bs-btn-hover-bg: #2563eb;
+            --bs-btn-hover-border-color: #2563eb;
+            --bs-btn-active-bg: #2563eb;
+            --bs-btn-active-border-color: #2563eb;
         }
-        .text-primary { color: #31566f !important; }
-        .bg-primary-subtle { background-color: #e8eef2 !important; }
+        .text-primary { color: #2563eb !important; }
+        .bg-primary-subtle { background-color: #e9f0ff !important; }
         .shadow-sm { box-shadow: 0 1px 3px rgba(20, 35, 48, 0.06) !important; }
         .nav-pills .nav-link { border-radius: 6px; color: #52616d; }
-        .nav-pills .nav-link.active { background-color: #31566f; color: white; }
+        .nav-pills .nav-link.active { background-color: #2563eb; color: white; }
         .table { --bs-table-hover-bg: #f5f7f8; }
         .table thead th { color: #394b59; font-weight: 600; }
         .table td, .table th { border-color: #e2e6ea; }
