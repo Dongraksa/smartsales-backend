@@ -231,7 +231,7 @@
                             <div class="card-custom p-4 cursor-pointer" onclick="openExpiryModal()">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
-                                        <p class="text-muted small fw-semibold mb-1">สินค้าใกล้หมดอายุ (7 วัน)</p>
+                                        <p class="text-muted small fw-semibold mb-1">สินค้าใกล้หมดอายุ (3 วัน)</p>
                                         <h3 class="fw-bold text-dark mb-0" id="dash-expiring-count">0 รายการ</h3>
                                     </div>
                                     <div class="icon-box bg-danger-subtle text-danger">
@@ -628,7 +628,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-3">
-                    <div class="small text-muted mb-2">แสดงสินค้าที่มีสต็อกและจะหมดอายุภายใน 7 วัน รวมถึงสินค้าที่หมดอายุแล้ว</div>
+                    <div class="small text-muted mb-2">แสดงสินค้าที่มีสต็อกและจะหมดอายุภายใน 3 วัน รวมถึงสินค้าที่หมดอายุแล้ว</div>
                     <div class="list-group list-group-flush mb-3" id="expiry-warning-list" style="max-height: 350px; overflow-y: auto;">
                         <div class="text-center py-3 text-muted">กำลังตรวจสอบวันหมดอายุ...</div>
                     </div>
@@ -1208,7 +1208,7 @@
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             const cutoff = new Date(today);
-            cutoff.setDate(cutoff.getDate() + 7);
+            cutoff.setDate(cutoff.getDate() + 3);
 
             return products
                 .filter(product => Number(product.stock_quantity) > 0 && product.expiration_date)
@@ -1231,7 +1231,7 @@
             if (count) count.innerText = `${warnings.length} รายการ`;
             if (!list) return;
             if (warnings.length === 0) {
-                list.innerHTML = '<div class="text-success text-center py-4"><i class="fa-solid fa-circle-check me-2"></i>ไม่มีสินค้าใกล้หมดอายุใน 7 วัน</div>';
+                list.innerHTML = '<div class="text-success text-center py-4"><i class="fa-solid fa-circle-check me-2"></i>ไม่มีสินค้าใกล้หมดอายุใน 3 วัน</div>';
                 return;
             }
 
