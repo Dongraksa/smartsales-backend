@@ -47,7 +47,7 @@
             object-fit: cover;
             width: 100%;
         }
-        .cart-card, .profile-card, .tracking-card {
+        .cart-card, .profile-card {
             border: none;
             border-radius: 20px;
             background: white;
@@ -97,45 +97,6 @@
             background-color: #1d4ed8;
             transform: scale(1.1);
         }
-        /* Order Status Timeline Stepper */
-        .stepper {
-            display: flex;
-            justify-content: space-between;
-            position: relative;
-            margin-bottom: 20px;
-        }
-        .stepper::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background-color: #e2e8f0;
-            z-index: 1;
-            transform: translateY(-50%);
-        }
-        .step {
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            background-color: #e2e8f0;
-            color: #64748b;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            z-index: 2;
-            position: relative;
-        }
-        .step.active {
-            background-color: #2563eb;
-            color: white;
-        }
-        .step.completed {
-            background-color: #16a34a;
-            color: white;
-        }
     </style>
 </head>
 <body>
@@ -153,11 +114,6 @@
                     <li class="nav-item">
                         <a class="nav-link nav-link-custom active" id="nav-store" href="#" onclick="switchTab('store')">
                             <i class="fa-solid fa-store me-1"></i> เมนูสินค้า
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link nav-link-custom" id="nav-tracking" href="#" onclick="switchTab('tracking')">
-                            <i class="fa-solid fa-truck-fast me-1"></i> ติดตามสถานะออเดอร์
                         </a>
                     </li>
                     <li class="nav-item">
@@ -278,26 +234,7 @@
                 </div>
             </div>
         </div>
-        <!-- TAB 2: ORDER TRACKING -->
-        <div id="tab-tracking" class="tab-content-item d-none">
-            <div class="row justify-content-center">
-                <div class="col-lg-10">
-                    <div class="tracking-card p-4 mb-4">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h4 class="fw-bold mb-0"><i class="fa-solid fa-truck-fast text-primary me-2"></i>ติดตามและเช็กสถานะออเดอร์</h4>
-                            <button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="fetchUserOrders()">
-                                <i class="fa-solid fa-rotate me-1"></i> รีเฟรชสถานะ
-                            </button>
-                        </div>
-                        <p class="text-muted small mb-0">ดูสถานะการจัดส่งออเดอร์ของคุณแบบ Real-Time จากทางร้าน</p>
-                    </div>
-                    <div id="user-orders-list-container">
-                        <div class="text-center py-5 text-muted">กำลังโหลดข้อมูลคำสั่งซื้อ...</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <!-- TAB 3: USER PROFILE -->
+        <!-- TAB 2: USER PROFILE -->
         <div id="tab-profile" class="tab-content-item d-none">
             <div class="row justify-content-center">
                 <div class="col-md-8 col-lg-6">
@@ -432,8 +369,8 @@
                             <strong class="text-success fs-6" id="success-total-amount">0.00 ฿</strong>
                         </div>
                     </div>
-                    <button class="btn btn-primary rounded-pill w-100 py-2 fw-bold" data-bs-dismiss="modal" onclick="resetCartAndGoTracking()">
-                        ดูสถานะการจัดส่งออเดอร์
+                    <button class="btn btn-primary rounded-pill w-100 py-2 fw-bold" data-bs-dismiss="modal" onclick="resetCartAndReturnToStore()">
+                        กลับไปเลือกสินค้า
                     </button>
                 </div>
             </div>
@@ -449,14 +386,6 @@
         let successModalObj = null;
         let editProfileModalObj = null;
         let adminAuthModalObj = null;
-        const statusTH = {
-            'Pending': 'รอดำเนินการ',
-            'Paid': 'ชำระเงินแล้ว',
-            'Shipped': 'กำลังจัดส่ง',
-            'Completed': 'เสร็จสิ้น',
-            'Cancelled': 'ยกเลิก'
-        };
-
         document.addEventListener("DOMContentLoaded", function() {
             if (typeof bootstrap !== 'undefined') {
                 const elModal = document.getElementById('successModal');
@@ -470,7 +399,7 @@
             renderUserProfile();
             loadProducts();
             loadPromotions();
-            fetchUserOrders();
+            fetchOrderSummary();
         });
 
         function openAdminAuthModal() {
@@ -552,9 +481,7 @@
             const nav = document.getElementById(`nav-${tabName}`);
             if (target) target.classList.remove('d-none');
             if (nav) nav.classList.add('active');
-            if (tabName === 'tracking') {
-                fetchUserOrders();
-            }
+            if (tabName === 'profile') fetchOrderSummary();
         }
 
         async function loadProducts() {
@@ -825,81 +752,24 @@
             }
         }
 
-        function resetCartAndGoTracking() {
+        function resetCartAndReturnToStore() {
             cart = [];
             updateCartUI();
-            switchTab('tracking');
+            switchTab('store');
         }
 
-        async function fetchUserOrders() {
+        async function fetchOrderSummary() {
             try {
                 const res = await fetch('/api/v1/admin/orders');
                 if (!res.ok) return;
                 const orders = await res.json();
-                const container = document.getElementById('user-orders-list-container');
-                if (!container) return;
-                if (!orders || orders.length === 0) {
-                    container.innerHTML = '<div class="text-center py-5 text-muted bg-white rounded-4 shadow-sm">คุณยังไม่มีประวัติการสั่งซื้อในระบบ</div>';
-                    document.getElementById('profile-total-orders').innerText = '0 ออเดอร์';
-                    document.getElementById('profile-total-spent').innerText = '0.00 ฿';
-                    return;
-                }
-                let totalSpent = 0;
-                orders.forEach(o => totalSpent += (o.total_amount || 0));
-                document.getElementById('profile-total-orders').innerText = `${orders.length} ออเดอร์`;
-                document.getElementById('profile-total-spent').innerText = `${totalSpent.toFixed(2)} ฿`;
-                container.innerHTML = '';
-                orders.forEach(o => {
-                    const statusText = statusTH[o.status] || o.status || 'ชำระเงินแล้ว';
-                    
-                    let s1 = 'completed', s2 = 'completed', s3 = '';
-                    if (o.status === 'Shipped') { s1 = 'completed'; s2 = 'completed'; s3 = 'active'; }
-                    if (o.status === 'Completed') { s1 = 'completed'; s2 = 'completed'; s3 = 'completed'; }
-                    if (o.status === 'Cancelled') { s1 = ''; s2 = ''; s3 = ''; }
-                    let itemsHtml = '';
-                    (o.items || []).forEach(i => {
-                        itemsHtml += `
-                            <div class="d-flex align-items-center justify-content-between mb-2">
-                                <div class="d-flex align-items-center gap-2">
-                                    <img src="${i.image_url || 'https://via.placeholder.com/40'}" width="38" height="38" class="rounded-3 object-fit-cover">
-                                    <span class="small fw-semibold">${i.product_name} <small class="text-muted">(x${i.quantity})</small></span>
-                                </div>
-                                <span class="small fw-bold">${(i.subtotal || 0).toFixed(2)} ฿</span>
-                            </div>
-                        `;
-                    });
-                    container.innerHTML += `
-                        <div class="tracking-card p-4 mb-3">
-                            <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3">
-                                <div>
-                                    <h5 class="fw-bold mb-0 text-primary">หมายเลขออเดอร์ #${o.sale_id}</h5>
-                                    <small class="text-muted">${o.timestamp} | ชำระผ่าน ${o.payment_method || 'PromptPay'}</small>
-                                </div>
-                                <span class="badge bg-primary rounded-pill px-3 py-2 fs-6">${statusText}</span>
-                            </div>
-                            <div class="px-4 py-2">
-                                <div class="stepper">
-                                    <div class="step ${s1}"><i class="fa-solid fa-receipt"></i></div>
-                                    <div class="step ${s2}"><i class="fa-solid fa-fire-burner"></i></div>
-                                    <div class="step ${s3}"><i class="fa-solid fa-house-circle-check"></i></div>
-                                </div>
-                                <div class="d-flex justify-content-between text-center small text-muted fw-semibold">
-                                    <span>รับออเดอร์แล้ว</span>
-                                    <span>กำลังเตรียมจัดส่ง</span>
-                                    <span>จัดส่งสำเร็จ</span>
-                                </div>
-                            </div>
-                            <hr class="my-3">
-                            <div class="mb-3">${itemsHtml}</div>
-                            <div class="d-flex justify-content-between align-items-center pt-2 border-top fw-bold">
-                                <span>ยอดรวมทั้งสิ้น</span>
-                                <span class="text-success fs-5">${(o.total_amount || 0).toFixed(2)} ฿</span>
-                            </div>
-                        </div>
-                    `;
-                });
+                const profileOrderCount = document.getElementById('profile-total-orders');
+                const profileTotalSpent = document.getElementById('profile-total-spent');
+                const totalSpent = (orders || []).reduce((sum, order) => sum + Number(order.total_amount || 0), 0);
+                if (profileOrderCount) profileOrderCount.innerText = `${orders.length} ออเดอร์`;
+                if (profileTotalSpent) profileTotalSpent.innerText = `${totalSpent.toFixed(2)} ฿`;
             } catch (err) {
-                console.error("Error fetching user orders:", err);
+                console.error("Error fetching order summary:", err);
             }
         }
     </script>
