@@ -172,10 +172,31 @@
                             <span class="badge bg-primary rounded-pill px-3 py-2" id="cart-item-count">0 ชิ้น</span>
                         </div>
 
-                        <!-- Customer Input Display/Edit for Order -->
-                        <div class="mb-3 p-2 bg-light rounded-3 border">
-                            <label class="form-label fw-bold small text-muted mb-1"><i class="fa-solid fa-user me-1 text-primary"></i>ชื่อผู้สั่งซื้อ (สำหรับสะสมแต้ม/RFM):</label>
-                            <input type="text" id="order-customer-name" class="form-control form-control-sm fw-bold border-0 bg-white" placeholder="ระบุชื่อลูกค้า...">
+                        <div class="mb-3 p-3 bg-light rounded-3 border">
+                            <label for="checkout-member-phone" class="form-label fw-bold small text-dark mb-1">
+                                <i class="fa-solid fa-id-card me-1 text-primary"></i>เบอร์โทรสมาชิก <span class="text-muted fw-normal">(ไม่บังคับ)</span>
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <input type="tel" id="checkout-member-phone" class="form-control" inputmode="tel" autocomplete="tel" placeholder="กรอกเบอร์โทรสมาชิก" oninput="resetCheckoutMember()">
+                                <button type="button" class="btn btn-outline-primary" onclick="lookupCheckoutMember()">ค้นหา</button>
+                            </div>
+                            <div id="member-lookup-status" class="small mt-2" aria-live="polite"></div>
+                            <div id="member-signup-panel" class="d-none mt-3 pt-3 border-top">
+                                <label for="checkout-member-name" class="form-label small fw-semibold">สมัครสมาชิกใหม่</label>
+                                <input type="text" id="checkout-member-name" class="form-control form-control-sm mb-2" placeholder="ชื่อ-นามสกุล">
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="member-history-consent">
+                                    <label class="form-check-label small" for="member-history-consent">ยินยอมให้ผูกประวัติการซื้อกับสมาชิกเพื่อสรุปยอดและวิเคราะห์บริการ</label>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-sm btn-primary" onclick="registerMemberAtCheckout()">สมัครและใช้สมาชิก</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="continueAsGuest()">ซื้อแบบทั่วไป</button>
+                                </div>
+                            </div>
+                            <div class="mt-3 pt-3 border-top">
+                                <label for="order-customer-name" class="form-label fw-semibold small text-muted mb-1">ชื่อลูกค้าทั่วไป (ไม่บังคับ)</label>
+                                <input type="text" id="order-customer-name" class="form-control form-control-sm" placeholder="ระบุชื่อ หรือเว้นว่างได้">
+                            </div>
                         </div>
 
                         <!-- Cart Items Container -->
@@ -382,6 +403,7 @@
         let cart = [];
         let activePromotions = [];
         let activeCouponCode = '';
+        let selectedCheckoutMember = null;
         let selectedPaymentMethod = 'PromptPay';
         let successModalObj = null;
         let editProfileModalObj = null;
@@ -440,7 +462,8 @@
         }
 
         function renderUserProfile() {
-            const userName = sessionStorage.getItem('user_name') || 'แป้ง';
+            const savedUserName = sessionStorage.getItem('user_name');
+            const userName = savedUserName || 'แป้ง';
             const userEmail = sessionStorage.getItem('user_email') || 'paeng@example.com';
             const userPhone = sessionStorage.getItem('user_phone') || '089-876-5432';
             document.getElementById('profile-name-display').innerText = userName;
@@ -449,7 +472,7 @@
             
             // Sync ชื่อไปยังช่องผู้สั่งซื้อในตะกร้า
             const custInput = document.getElementById('order-customer-name');
-            if (custInput && !custInput.value) {
+            if (custInput && !custInput.value && savedUserName) {
                 custInput.value = userName;
             }
         }
@@ -707,6 +730,97 @@
             updateCartUI();
         }
 
+        function resetCheckoutMember() {
+            if (selectedCheckoutMember) {
+                const customerNameInput = document.getElementById('order-customer-name');
+                if (customerNameInput.value === selectedCheckoutMember.full_name) customerNameInput.value = '';
+            }
+            selectedCheckoutMember = null;
+            document.getElementById('member-lookup-status').textContent = '';
+            document.getElementById('member-signup-panel').classList.add('d-none');
+            document.getElementById('member-history-consent').checked = false;
+        }
+
+        function continueAsGuest() {
+            selectedCheckoutMember = null;
+            document.getElementById('checkout-member-phone').value = '';
+            document.getElementById('checkout-member-name').value = '';
+            document.getElementById('member-history-consent').checked = false;
+            document.getElementById('member-signup-panel').classList.add('d-none');
+            const status = document.getElementById('member-lookup-status');
+            status.textContent = 'จะบันทึกออเดอร์เป็นลูกค้าทั่วไป';
+            status.className = 'small mt-2 text-muted';
+        }
+
+        async function lookupCheckoutMember() {
+            const phoneInput = document.getElementById('checkout-member-phone');
+            const status = document.getElementById('member-lookup-status');
+            const phone = phoneInput.value.trim();
+            if (!phone) {
+                status.textContent = 'กรอกเบอร์โทรศัพท์เพื่อค้นหาสมาชิก';
+                status.className = 'small mt-2 text-danger';
+                return false;
+            }
+            try {
+                const res = await fetch(`/api/v1/members/lookup?phone=${encodeURIComponent(phone)}`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'ค้นหาสมาชิกไม่สำเร็จ');
+                if (data.found) {
+                    selectedCheckoutMember = data.member;
+                    document.getElementById('order-customer-name').value = data.member.full_name;
+                    document.getElementById('member-signup-panel').classList.add('d-none');
+                    status.textContent = `พบสมาชิก: ${data.member.full_name} ออเดอร์นี้จะผูกกับสมาชิก`;
+                    status.className = 'small mt-2 text-success fw-semibold';
+                    return true;
+                }
+                selectedCheckoutMember = null;
+                document.getElementById('member-signup-panel').classList.remove('d-none');
+                status.textContent = 'ไม่พบสมาชิกเบอร์นี้ สมัครใหม่หรือเลือกซื้อแบบทั่วไปได้';
+                status.className = 'small mt-2 text-warning fw-semibold';
+                return false;
+            } catch (error) {
+                status.textContent = error.message || 'ไม่สามารถค้นหาสมาชิกได้';
+                status.className = 'small mt-2 text-danger';
+                return false;
+            }
+        }
+
+        async function registerMemberAtCheckout() {
+            const fullName = document.getElementById('checkout-member-name').value.trim();
+            const phone = document.getElementById('checkout-member-phone').value.trim();
+            if (!fullName || !phone) {
+                alert('กรอกชื่อและเบอร์โทรศัพท์เพื่อสมัครสมาชิก');
+                return;
+            }
+            if (!document.getElementById('member-history-consent').checked) {
+                alert('กรุณายินยอมให้ผูกประวัติการซื้อกับสมาชิกก่อนสมัคร');
+                return;
+            }
+            try {
+                const res = await fetch('/api/v1/members', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ full_name: fullName, phone, analytics_consent: true })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    if (res.status === 409) {
+                        await lookupCheckoutMember();
+                        return;
+                    }
+                    throw new Error(data.detail || 'สมัครสมาชิกไม่สำเร็จ');
+                }
+                selectedCheckoutMember = data.member;
+                document.getElementById('order-customer-name').value = data.member.full_name;
+                document.getElementById('member-signup-panel').classList.add('d-none');
+                const status = document.getElementById('member-lookup-status');
+                status.textContent = `สมัครสมาชิกสำเร็จ: ${data.member.full_name}`;
+                status.className = 'small mt-2 text-success fw-semibold';
+            } catch (error) {
+                alert(error.message || 'ไม่สามารถสมัครสมาชิกได้');
+            }
+        }
+
         function selectPaymentMethod(method, btnEl) {
             selectedPaymentMethod = method;
             document.querySelectorAll('.payment-option-btn').forEach(btn => btn.classList.remove('active'));
@@ -716,14 +830,22 @@
         // --- แก้ไข: ดึง customer_name ส่งไปยัง API ---
         async function confirmCheckout() {
             if (cart.length === 0) return;
+
+            const enteredMemberPhone = document.getElementById('checkout-member-phone').value.trim();
+            if (enteredMemberPhone && (!selectedCheckoutMember || selectedCheckoutMember.phone !== enteredMemberPhone)) {
+                const memberFound = await lookupCheckoutMember();
+                if (!memberFound) return;
+            }
             
             const custNameInput = document.getElementById('order-customer-name');
-            const customerName = (custNameInput && custNameInput.value.trim()) 
-                ? custNameInput.value.trim() 
-                : (sessionStorage.getItem('user_name') || 'แป้ง');
+            const customerName = selectedCheckoutMember?.full_name ||
+                (custNameInput && custNameInput.value.trim()) ||
+                sessionStorage.getItem('user_name') ||
+                'ลูกค้าทั่วไป';
 
             const payload = {
                 customer_name: customerName,
+                member_phone: selectedCheckoutMember?.phone || null,
                 items: cart,
                 payment_method: selectedPaymentMethod,
                 promotion_ids: getEligiblePromotions().map(promo => promo.promo_id),
@@ -754,6 +876,13 @@
 
         function resetCartAndReturnToStore() {
             cart = [];
+            selectedCheckoutMember = null;
+            document.getElementById('checkout-member-phone').value = '';
+            document.getElementById('checkout-member-name').value = '';
+            document.getElementById('order-customer-name').value = '';
+            document.getElementById('member-lookup-status').textContent = '';
+            document.getElementById('member-signup-panel').classList.add('d-none');
+            document.getElementById('member-history-consent').checked = false;
             updateCartUI();
             switchTab('store');
         }

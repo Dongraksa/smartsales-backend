@@ -50,6 +50,43 @@ users_db = [
     }
 ]
 
+def normalize_member_phone(phone: str) -> str:
+    digits = "".join(character for character in str(phone) if character.isdigit())
+    if digits.startswith("66") and len(digits) == 11:
+        digits = "0" + digits[2:]
+    return digits
+
+members_db = [
+    {
+        "member_id": user["user_id"],
+        "full_name": user["full_name"],
+        "phone": normalize_member_phone(user["phone"]),
+        "analytics_consent": False
+    }
+    for user in users_db
+    if user.get("role") == "customer" and normalize_member_phone(user.get("phone", ""))
+]
+
+def resolve_order_member(order: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    member_id = order.get("customer_id")
+    if member_id is not None:
+        member = next((item for item in members_db if item["member_id"] == member_id), None)
+        if member:
+            return member
+
+    member_phone = normalize_member_phone(order.get("customer_phone", ""))
+    if member_phone:
+        member = next((item for item in members_db if item["phone"] == member_phone), None)
+        if member:
+            return member
+
+    if "customer_id" in order or "customer_phone" in order:
+        return None
+
+    customer_name = order.get("customer_name")
+    matching_members = [item for item in members_db if item["full_name"] == customer_name]
+    return matching_members[0] if len(matching_members) == 1 else None
+
 products_db = [
     {
         "product_id": 1,
@@ -161,6 +198,11 @@ class RegisterSchema(BaseModel):
     phone: str
     password: str
 
+class MemberSignupSchema(BaseModel):
+    full_name: str
+    phone: str
+    analytics_consent: bool = False
+
 class OrderStatusUpdate(BaseModel):
     status: str
 
@@ -233,20 +275,66 @@ def login(data: LoginSchema):
 def register(data: RegisterSchema):
     if any(u["email"] == data.email for u in users_db):
         raise HTTPException(status_code=400, detail="อีเมลนี้ถูกใช้งานในระบบแล้ว")
+    normalized_phone = normalize_member_phone(data.phone)
+    if len(normalized_phone) != 10 or not normalized_phone.startswith("0"):
+        raise HTTPException(status_code=422, detail="กรุณากรอกเบอร์โทรศัพท์ 10 หลัก")
+    if any(member["phone"] == normalized_phone for member in members_db):
+        raise HTTPException(status_code=409, detail="เบอร์โทรนี้เป็นสมาชิกอยู่แล้ว")
+    member_id = max((member["member_id"] for member in members_db), default=0) + 1
     new_user = {
         "user_id": len(users_db) + 1,
         "full_name": data.full_name,
         "email": data.email,
-        "phone": data.phone,
+        "phone": normalized_phone,
+        "member_id": member_id,
         "password": data.password,
         "role": "customer"
     }
     users_db.append(new_user)
+    members_db.append({
+        "member_id": member_id,
+        "full_name": data.full_name.strip(),
+        "phone": normalized_phone,
+        "analytics_consent": True
+    })
     return {
         "status": "success",
         "message": "สมัครสมาชิกเรียบร้อยแล้ว",
-        "user_id": new_user["user_id"]
+        "user_id": new_user["user_id"],
+        "member_id": member_id
     }
+
+@app.get("/api/v1/members/lookup")
+def lookup_member(phone: str):
+    normalized_phone = normalize_member_phone(phone)
+    if len(normalized_phone) != 10 or not normalized_phone.startswith("0"):
+        raise HTTPException(status_code=422, detail="กรุณากรอกเบอร์โทรศัพท์ 10 หลัก")
+    member = next((item for item in members_db if item["phone"] == normalized_phone), None)
+    if not member:
+        return {"found": False}
+    return {"found": True, "member": member}
+
+@app.post("/api/v1/members")
+def create_checkout_member(data: MemberSignupSchema):
+    full_name = data.full_name.strip()
+    normalized_phone = normalize_member_phone(data.phone)
+    if not full_name:
+        raise HTTPException(status_code=422, detail="กรุณากรอกชื่อ-นามสกุล")
+    if len(normalized_phone) != 10 or not normalized_phone.startswith("0"):
+        raise HTTPException(status_code=422, detail="กรุณากรอกเบอร์โทรศัพท์ 10 หลัก")
+    if not data.analytics_consent:
+        raise HTTPException(status_code=422, detail="กรุณายินยอมให้ผูกประวัติการซื้อกับสมาชิก")
+    if any(member["phone"] == normalized_phone for member in members_db):
+        raise HTTPException(status_code=409, detail="เบอร์โทรนี้เป็นสมาชิกอยู่แล้ว")
+
+    member = {
+        "member_id": max((item["member_id"] for item in members_db), default=0) + 1,
+        "full_name": full_name,
+        "phone": normalized_phone,
+        "analytics_consent": True
+    }
+    members_db.append(member)
+    return {"status": "success", "member": member}
 
 # --- CHECKOUT & ORDERS HANDLER ---
 @app.post("/api/v1/pos/checkout")
@@ -265,6 +353,16 @@ async def create_order(request: Request):
         raw_items = data.get("items") or data.get("cart") or data.get("order_items") or []
     if not raw_items:
         raise HTTPException(status_code=400, detail="ไม่มีรายการสินค้าในตะกร้า")
+
+    member = None
+    member_phone = ""
+    if isinstance(data, dict) and data.get("member_phone"):
+        member_phone = normalize_member_phone(data["member_phone"])
+        if len(member_phone) != 10 or not member_phone.startswith("0"):
+            raise HTTPException(status_code=422, detail="กรุณากรอกเบอร์สมาชิก 10 หลัก")
+        member = next((item for item in members_db if item["phone"] == member_phone), None)
+        if not member:
+            raise HTTPException(status_code=404, detail="ไม่พบสมาชิกจากเบอร์โทรนี้")
     
     validated_lines = []
     requested_quantities = defaultdict(int)
@@ -380,16 +478,19 @@ async def create_order(request: Request):
         applied_promo["usage_count"] = applied_promo.get("usage_count", 0) + 1
     total_discount = min(total_discount, total_amount)
     final_total = max(0.0, total_amount - total_discount)
-    payment_method = "PromptPay"
-    customer_name = "ลูกค้าทั่วไป"
-    if isinstance(data, dict):
-        payment_method = data.get("payment_method") or data.get("payment") or "PromptPay"
-        customer_name = data.get("customer_name") or "ลูกค้าทั่วไป"
+    payment_method = data.get("payment_method") or data.get("payment") or "PromptPay" if isinstance(data, dict) else "PromptPay"
+    customer_name = member["full_name"] if member else (
+        data.get("customer_name") or "ลูกค้าทั่วไป" if isinstance(data, dict) else "ลูกค้าทั่วไป"
+    )
+    customer_id = member["member_id"] if member else None
+    customer_phone = member["phone"] if member else None
         
     sale_id = max([o["sale_id"] for o in orders_db], default=1000) + 1
     new_order = {
         "sale_id": sale_id,
+        "customer_id": customer_id,
         "customer_name": customer_name,
+        "customer_phone": customer_phone,
         "timestamp": (datetime.now() + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S"),
         "payment_method": payment_method,
         "subtotal_amount": round(total_amount, 2),
@@ -403,6 +504,7 @@ async def create_order(request: Request):
         "status": "success",
         "message": "สั่งซื้อสำเร็จเรียบร้อยแล้ว",
         "sale_id": sale_id,
+        "customer_id": customer_id,
         "subtotal_amount": round(total_amount, 2),
         "discount_amount": round(total_discount, 2),
         "total_amount": round(final_total, 2),
@@ -741,10 +843,13 @@ def get_rfm_analysis():
     now = datetime.now() + timedelta(hours=7)
     valid_orders = [o for o in orders_db if o.get("status") in ["Paid", "Completed"]]
     
-    customer_stats = defaultdict(lambda: {"last_date": None, "frequency": 0, "monetary": 0.0})
+    customer_stats = defaultdict(lambda: {"last_date": None, "frequency": 0, "monetary": 0.0, "customer_name": ""})
     
     for order in valid_orders:
-        c_name = order.get("customer_name") or "ลูกค้าทั่วไป"
+        member = resolve_order_member(order)
+        if not member:
+            continue
+        customer_id = member["member_id"]
         amount = float(order.get("total_amount", 0.0))
         ts_str = order.get("timestamp")
         
@@ -753,13 +858,15 @@ def get_rfm_analysis():
         except Exception:
             dt = now
             
-        stats = customer_stats[c_name]
+        stats = customer_stats[customer_id]
+        stats["customer_name"] = member["full_name"]
         stats["frequency"] += 1
         stats["monetary"] += amount
         if stats["last_date"] is None or dt > stats["last_date"]:
             stats["last_date"] = dt
     rfm_results = []
-    for c_name, stats in customer_stats.items():
+    for customer_id, stats in customer_stats.items():
+        c_name = stats["customer_name"]
         recency_days = (now - stats["last_date"]).days if stats["last_date"] else 0
         f = stats["frequency"]
         m = stats["monetary"]
@@ -780,6 +887,7 @@ def get_rfm_analysis():
             segment = "General Customer (ลูกค้าทั่วไป)"
             
         rfm_results.append({
+            "customer_id": customer_id,
             "customer_name": c_name,
             "recency_days": recency_days,
             "frequency": f,
@@ -797,19 +905,23 @@ def get_churn_risk_analysis():
     valid_orders = [o for o in orders_db if o.get("status") in ["Paid", "Completed"]]
     
     customer_history = defaultdict(list)
+    customer_names = {}
     for order in valid_orders:
-        c_name = order.get("customer_name") or "ลูกค้าทั่วไป"
-        if c_name == "ลูกค้าทั่วไป":
+        member = resolve_order_member(order)
+        if not member:
             continue
+        customer_id = member["member_id"]
+        customer_names[customer_id] = member["full_name"]
         ts_str = order.get("timestamp")
         try:
             dt = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
-            customer_history[c_name].append(dt)
+            customer_history[customer_id].append(dt)
         except Exception:
             pass
 
     churn_results = []
-    for c_name, dates in customer_history.items():
+    for customer_id, dates in customer_history.items():
+        c_name = customer_names[customer_id]
         dates.sort()
         last_date = dates[-1]
         recency_days = (now - last_date).days
@@ -832,6 +944,7 @@ def get_churn_risk_analysis():
             risk_level = "Normal (ปกติ)"
 
         churn_results.append({
+            "customer_id": customer_id,
             "customer_name": c_name,
             "total_orders": total_orders,
             "avg_interval_days": avg_interval_days,
@@ -854,34 +967,39 @@ def get_personal_patterns():
         "hour_counts": defaultdict(int),
         "favorite_items": defaultdict(int)
     })
+    customer_names = {}
     
     for order in valid_orders:
-        c_name = order.get("customer_name") or "ลูกค้าทั่วไป"
-        if c_name == "ลูกค้าทั่วไป":
+        member = resolve_order_member(order)
+        if not member:
             continue
+        customer_id = member["member_id"]
+        customer_names[customer_id] = member["full_name"]
         ts_str = order.get("timestamp")
         try:
             dt = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
             day_name = days_th[dt.weekday()]
             hour_slot = f"{dt.hour:02d}:00 - {dt.hour+1:02d}:00 น."
             
-            customer_patterns[c_name]["day_counts"][day_name] += 1
-            customer_patterns[c_name]["hour_counts"][hour_slot] += 1
+            customer_patterns[customer_id]["day_counts"][day_name] += 1
+            customer_patterns[customer_id]["hour_counts"][hour_slot] += 1
             
             for item in order.get("items", []):
                 p_name = item.get("product_name")
                 if p_name:
-                    customer_patterns[c_name]["favorite_items"][p_name] += item.get("quantity", 1)
+                    customer_patterns[customer_id]["favorite_items"][p_name] += item.get("quantity", 1)
         except Exception:
             pass
 
     pattern_results = []
-    for c_name, data in customer_patterns.items():
+    for customer_id, data in customer_patterns.items():
+        c_name = customer_names[customer_id]
         pref_day = max(data["day_counts"].items(), key=lambda x: x[1])[0] if data["day_counts"] else "ไม่ระบุ"
         pref_hour = max(data["hour_counts"].items(), key=lambda x: x[1])[0] if data["hour_counts"] else "ไม่ระบุ"
         pref_item = max(data["favorite_items"].items(), key=lambda x: x[1])[0] if data["favorite_items"] else "ไม่ระบุ"
         
         pattern_results.append({
+            "customer_id": customer_id,
             "customer_name": c_name,
             "preferred_day": pref_day,
             "preferred_hour": pref_hour,
