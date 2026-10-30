@@ -83,19 +83,16 @@
                     <h5 class="fw-bold mb-0 text-white">SmartSales Admin</h5>
                 </div>
                 <nav class="nav flex-column">
-                    <a class="nav-link active" href="#" onclick="switchTab('dashboard')">
+                    <a class="nav-link active" data-tab="dashboard" href="#" onclick="switchTab('dashboard')">
                         <i class="fa-solid fa-house me-2"></i> แดชบอร์ด
                     </a>
-                    <a class="nav-link" href="#" onclick="switchTab('orders')">
-                        <i class="fa-solid fa-receipt me-2"></i> จัดการออเดอร์
-                    </a>
-                    <a class="nav-link" href="#" onclick="switchTab('products')">
+                    <a class="nav-link" data-tab="products" href="#" onclick="switchTab('products')">
                         <i class="fa-solid fa-boxes-stacked me-2"></i> สต็อกสินค้า & ROP
                     </a>
-                    <a class="nav-link" href="#" onclick="switchTab('analytics')">
+                    <a class="nav-link" data-tab="analytics" href="#" onclick="switchTab('analytics')">
                         <i class="fa-solid fa-brain me-2"></i> การวิเคราะห์การขาย & พฤติกรรม
                     </a>
-                    <a class="nav-link" href="#" onclick="switchTab('promotions')">
+                    <a class="nav-link" data-tab="promotions" href="#" onclick="switchTab('promotions')">
                         <i class="fa-solid fa-tags me-2"></i> จัดการโปรโมชัน
                     </a>
                     <hr class="text-secondary my-3">
@@ -140,7 +137,7 @@
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="card-custom p-4 cursor-pointer" onclick="switchTab('orders')">
+                            <div class="card-custom p-4">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
                                         <p class="text-muted small fw-semibold mb-1">คำสั่งซื้อทั้งหมด</p>
@@ -151,7 +148,7 @@
                                     </div>
                                 </div>
                                 <div class="mt-3 text-success small fw-semibold">
-                                    <i class="fa-solid fa-arrow-right me-1"></i> ไปยังหน้าจัดการออเดอร์
+                                    <i class="fa-solid fa-receipt me-1"></i> จำนวนออเดอร์ในระบบ
                                 </div>
                             </div>
                         </div>
@@ -191,7 +188,6 @@
                     <div class="card-custom p-4">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h5 class="fw-bold mb-0">📦 ออเดอร์ล่าสุดที่เข้ามาในระบบ</h5>
-                            <button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="switchTab('orders')">ดูทั้งหมด</button>
                         </div>
                         <div class="table-responsive">
                             <table class="table table-hover align-middle">
@@ -214,7 +210,7 @@
                 </div>
 
                 <!-- TAB 2: ORDERS MANAGEMENT -->
-                <div id="tab-orders" class="tab-content-item d-none">
+                <div id="tab-orders" class="tab-content-item d-none" hidden>
                     <div class="card-custom p-4">
                         <h5 class="fw-bold mb-3">จัดการและติดตามสถานะออเดอร์</h5>
                         <div class="table-responsive">
@@ -803,21 +799,16 @@
         });
 
         function switchTab(tabName) {
+            if (tabName === 'orders') return;
             document.querySelectorAll('.tab-content-item').forEach(el => el.classList.add('d-none'));
             document.querySelectorAll('.sidebar .nav-link').forEach(el => el.classList.remove('active'));
             const targetTab = document.getElementById(`tab-${tabName}`);
             if (targetTab) targetTab.classList.remove('d-none');
             
-            const navLinks = document.querySelectorAll('.sidebar .nav-link');
-            if(tabName === 'dashboard') navLinks[0]?.classList.add('active');
-            if(tabName === 'orders') navLinks[1]?.classList.add('active');
-            if(tabName === 'products') navLinks[2]?.classList.add('active');
-            if(tabName === 'analytics') navLinks[3]?.classList.add('active');
-            if(tabName === 'promotions') navLinks[4]?.classList.add('active');
+            document.querySelector(`.sidebar .nav-link[data-tab="${tabName}"]`)?.classList.add('active');
 
             const titles = {
                 'dashboard': 'แดชบอร์ดผู้ดูแลระบบ',
-                'orders': 'จัดการและติดตามสถานะออเดอร์',
                 'products': 'จัดการสต็อกและระบบคำนวณ ROP',
                 'analytics': 'วิเคราะห์พฤติกรรมการขายขั้นสูง (Analytics, RFM, Churn & Personal Patterns)',
                 'promotions': 'ระบบจัดการโปรโมชันและแคมเปญ'
