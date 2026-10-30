@@ -203,6 +203,9 @@ class MemberSignupSchema(BaseModel):
     phone: str
     analytics_consent: bool = False
 
+class VoidOrderSchema(BaseModel):
+    reason: str = "ยกเลิกโดยพนักงาน"
+
 class OrderStatusUpdate(BaseModel):
     status: str
 
@@ -707,6 +710,39 @@ def get_dashboard_summary(
 @app.get("/api/v1/admin/orders")
 def get_orders():
     return orders_db
+
+def require_staff_access(request: Request):
+    if request.headers.get("x-admin-token") != "admin-secret-token":
+        raise HTTPException(status_code=401, detail="ต้องยืนยันสิทธิ์พนักงานก่อนดำเนินการ")
+
+@app.get("/api/v1/staff/orders")
+def get_staff_order_history(request: Request):
+    require_staff_access(request)
+    return orders_db
+
+@app.post("/api/v1/staff/orders/{sale_id}/void")
+def void_staff_order(sale_id: int, data: VoidOrderSchema, request: Request):
+    require_staff_access(request)
+    order = next((item for item in orders_db if item["sale_id"] == sale_id), None)
+    if not order:
+        raise HTTPException(status_code=404, detail="ไม่พบบิลนี้ในระบบ")
+    if order.get("status") not in {"Paid", "Pending"}:
+        raise HTTPException(status_code=409, detail="ยกเลิกได้เฉพาะบิลที่ยังไม่เสร็จสิ้นหรือถูกยกเลิกแล้ว")
+
+    for item in order.get("items", []):
+        product_id = item.get("product_id")
+        product = next((p for p in products_db if product_id is not None and p["product_id"] == product_id), None)
+        if not product:
+            product_name = item.get("product_name")
+            product = next((p for p in products_db if p["product_name"] == product_name), None)
+        if product:
+            product["stock_quantity"] += int(item.get("quantity", 0))
+
+    order["status"] = "Cancelled"
+    order["voided_at"] = (datetime.now() + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
+    order["voided_by"] = "staff"
+    order["void_reason"] = data.reason.strip() or "ยกเลิกโดยพนักงาน"
+    return {"status": "success", "order": order}
 
 @app.patch("/api/v1/admin/orders/{sale_id}/status")
 def update_order_status(sale_id: int, status_update: OrderStatusUpdate):

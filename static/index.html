@@ -129,6 +129,11 @@
                             <i class="fa-solid fa-store me-1"></i> เมนูสินค้า
                         </a>
                     </li>
+                    <li class="nav-item d-none" id="staff-order-history-nav-item">
+                        <a class="nav-link nav-link-custom" id="nav-purchase-history" href="#" onclick="switchTab('purchase-history')">
+                            <i class="fa-solid fa-receipt me-1"></i> ประวัติการซื้อ
+                        </a>
+                    </li>
                     <li class="nav-item">
                         <a class="nav-link nav-link-custom" id="nav-profile" href="#" onclick="switchTab('profile')">
                             <i class="fa-solid fa-user me-1"></i> โปรไฟล์ของฉัน
@@ -265,6 +270,39 @@
                             <i class="fa-solid fa-circle-check me-2"></i>ยืนยันการสั่งซื้อ
                         </button>
                     </div>
+                </div>
+            </div>
+        </div>
+        <!-- TAB 2: STAFF PURCHASE HISTORY -->
+        <div id="tab-purchase-history" class="tab-content-item d-none">
+            <div class="card-custom p-4">
+                <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                    <div>
+                        <h4 class="fw-bold mb-1">ประวัติการซื้อ</h4>
+                        <p class="text-muted small mb-0">รายการบิลของร้าน · การยกเลิกจะเก็บประวัติและคืนสินค้าเข้าสต็อก</p>
+                    </div>
+                    <button class="btn btn-outline-primary btn-sm" type="button" onclick="fetchStaffOrderHistory()">
+                        <i class="fa-solid fa-rotate me-1"></i>รีเฟรช
+                    </button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>เลขที่บิล</th>
+                                <th>วัน-เวลา</th>
+                                <th>ลูกค้า</th>
+                                <th>เบอร์สมาชิก</th>
+                                <th>รายการสินค้า</th>
+                                <th class="text-end">ยอดสุทธิ</th>
+                                <th>สถานะ</th>
+                                <th>การดำเนินการ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="staff-order-history-body">
+                            <tr><td colspan="8" class="text-center py-4 text-muted">กำลังโหลดประวัติการซื้อ...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
