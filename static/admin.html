@@ -574,21 +574,39 @@
                         </div>
                         <div class="mb-3">
                             <label class="form-label small fw-semibold">ประเภทโปรโมชัน</label>
-                            <select id="promo-type" class="form-select rounded-3" required>
+                            <select id="promo-type" class="form-select rounded-3" onchange="syncPromotionTypeFields()" required>
                                 <option value="bundle">เซตคู่สุดคุ้ม (Bundle Deal)</option>
                                 <option value="cross_sell">สิทธิ์แลกซื้อส่วนลด (Cross-Selling)</option>
                                 <option value="discount_code">คูปอง / โค้ดส่วนลด (Coupon)</option>
                             </select>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label small fw-semibold">สินค้าในโปรโมชัน (เลือกได้หลายรายการ)</label>
+                        <div class="mb-3" id="promo-products-wrap">
+                            <label class="form-label small fw-semibold" id="promo-products-label">สินค้าในชุด (เลือกอย่างน้อย 2 รายการ)</label>
                             <select id="promo-products" class="form-select rounded-3" multiple size="5" required>
                                 <option value="" disabled>กำลังโหลดสินค้า...</option>
                             </select>
                         </div>
+                        <div class="mb-3 d-none" id="promo-trigger-wrap">
+                            <label class="form-label small fw-semibold">สินค้าที่ใช้เป็นเงื่อนไขการซื้อ</label>
+                            <select id="promo-trigger-products" class="form-select rounded-3" multiple size="4">
+                                <option value="" disabled>กำลังโหลดสินค้า...</option>
+                            </select>
+                        </div>
+                        <div class="mb-3 d-none" id="promo-coupon-wrap">
+                            <label class="form-label small fw-semibold">รหัสคูปอง</label>
+                            <input type="text" id="promo-coupon-code" class="form-control rounded-3" placeholder="เช่น SAVE10">
+                        </div>
                         <div class="mb-3">
-                            <label class="form-label small fw-semibold">ส่วนลด (บาท)</label>
+                            <label class="form-label small fw-semibold">รูปแบบส่วนลด</label>
+                            <select id="promo-discount-type" class="form-select rounded-3" onchange="syncPromotionTypeFields()" required>
+                                <option value="fixed">ลดเป็นจำนวนเงิน (บาท)</option>
+                                <option value="percent">ลดเป็นเปอร์เซ็นต์ (%)</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold" id="promo-discount-amount-label">จำนวนเงินที่ลด (บาท)</label>
                             <input type="number" id="promo-discount-amount" class="form-control rounded-3" min="0.01" step="0.01" required>
+                            <small class="text-muted" id="promo-discount-hint">ส่วนลดจะไม่เกินยอดสินค้าที่ร่วมรายการ</small>
                         </div>
                         <div class="row g-2 mb-3">
                             <div class="col-6">
@@ -1321,36 +1339,110 @@
                 if (!res.ok) throw new Error('Unable to load products');
                 const products = await res.json();
                 const inStockProducts = products.filter(product => Number(product.stock_quantity) > 0);
+                const triggerSelect = document.getElementById('promo-trigger-products');
                 productSelect.replaceChildren();
+                triggerSelect.replaceChildren();
                 if (inStockProducts.length === 0) {
                     productSelect.add(new Option('ไม่มีสินค้าในสต็อก', '', true, true));
                     productSelect.options[0].disabled = true;
+                    triggerSelect.add(new Option('ไม่มีสินค้าในสต็อก', '', true, true));
+                    triggerSelect.options[0].disabled = true;
                 } else {
                     inStockProducts.forEach(product => {
-                        productSelect.add(new Option(
-                            `${product.product_name} (คงเหลือ ${product.stock_quantity} ชิ้น)`,
-                            product.product_id
-                        ));
+                        const label = `${product.product_name} (คงเหลือ ${product.stock_quantity} ชิ้น)`;
+                        productSelect.add(new Option(label, product.product_id));
+                        triggerSelect.add(new Option(label, product.product_id));
                     });
                 }
             } catch (err) {
                 productSelect.replaceChildren(new Option('โหลดรายการสินค้าไม่สำเร็จ', '', true, true));
                 productSelect.options[0].disabled = true;
+                const triggerSelect = document.getElementById('promo-trigger-products');
+                triggerSelect.replaceChildren(new Option('โหลดรายการสินค้าไม่สำเร็จ', '', true, true));
+                triggerSelect.options[0].disabled = true;
             }
+            syncPromotionTypeFields();
             if (promoModalObj) promoModalObj.show();
+        }
+
+        function syncPromotionTypeFields() {
+            const promoType = document.getElementById('promo-type').value;
+            const discountType = document.getElementById('promo-discount-type').value;
+            const productsSelect = document.getElementById('promo-products');
+            const triggerSelect = document.getElementById('promo-trigger-products');
+            const couponCode = document.getElementById('promo-coupon-code');
+            const productsLabel = document.getElementById('promo-products-label');
+            const triggerWrap = document.getElementById('promo-trigger-wrap');
+            const couponWrap = document.getElementById('promo-coupon-wrap');
+            const discountInput = document.getElementById('promo-discount-amount');
+
+            triggerWrap.classList.toggle('d-none', promoType !== 'cross_sell');
+            couponWrap.classList.toggle('d-none', promoType !== 'discount_code');
+            triggerSelect.required = promoType === 'cross_sell';
+            couponCode.required = promoType === 'discount_code';
+            productsSelect.required = promoType !== 'discount_code';
+            productsLabel.innerText = promoType === 'cross_sell'
+                ? 'สินค้าเป้าหมายที่รับส่วนลด (เลือกได้หลายรายการ)'
+                : promoType === 'discount_code'
+                    ? 'สินค้าใช้ได้ (เว้นว่างเพื่อใช้ได้ทุกสินค้า)'
+                    : 'สินค้าในชุด (เลือกอย่างน้อย 2 รายการ)';
+
+            discountInput.max = discountType === 'percent' ? '100' : '';
+            discountInput.step = '0.01';
+            document.getElementById('promo-discount-amount-label').innerText = discountType === 'percent'
+                ? 'เปอร์เซ็นต์ส่วนลด (%)'
+                : 'จำนวนเงินที่ลด (บาท)';
+            document.getElementById('promo-discount-hint').innerText = discountType === 'percent'
+                ? 'ส่วนลดคำนวณจากยอดสินค้าที่ร่วมรายการและไม่เกินยอดนั้น'
+                : 'ส่วนลดจะไม่เกินยอดสินค้าที่ร่วมรายการ';
+        }
+
+        function getSelectedPromoProductIds(selectId) {
+            return Array.from(document.getElementById(selectId).selectedOptions)
+                .map(option => option.value)
+                .filter(value => value !== '')
+                .map(Number);
         }
 
         async function savePromoSubmit(e) {
             e.preventDefault();
             const discountAmount = Number(document.getElementById('promo-discount-amount').value);
+            const promoType = document.getElementById('promo-type').value;
+            const discountType = document.getElementById('promo-discount-type').value;
+            const productIds = getSelectedPromoProductIds('promo-products');
+            const triggerProductIds = getSelectedPromoProductIds('promo-trigger-products');
+            if (promoType === 'bundle' && productIds.length < 2) {
+                alert('โปรโมชันแบบเซตต้องเลือกสินค้าอย่างน้อย 2 รายการ');
+                return;
+            }
+            if (promoType === 'cross_sell' && (
+                productIds.length === 0 ||
+                triggerProductIds.length === 0 ||
+                triggerProductIds.some(productId => productIds.includes(productId))
+            )) {
+                alert('เลือกสินค้ากระตุ้นและสินค้าเป้าหมายอย่างน้อยประเภทละ 1 รายการ และห้ามเป็นสินค้าเดียวกัน');
+                return;
+            }
+            if (!Number.isFinite(discountAmount) || discountAmount <= 0 || (discountType === 'percent' && discountAmount > 100)) {
+                alert('กรอกส่วนลดให้ถูกต้อง โดยเปอร์เซ็นต์ต้องไม่เกิน 100');
+                return;
+            }
+            const startDate = document.getElementById('promo-start').value;
+            const endDate = document.getElementById('promo-end').value;
+            if (endDate < startDate) {
+                alert('วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่มต้น');
+                return;
+            }
             const payload = {
                 title: document.getElementById('promo-title').value,
-                promo_type: document.getElementById('promo-type').value,
-                product_ids: Array.from(document.getElementById('promo-products').selectedOptions)
-                    .map(option => Number(option.value)),
+                promo_type: promoType,
+                product_ids: productIds,
+                trigger_product_ids: triggerProductIds,
+                coupon_code: document.getElementById('promo-coupon-code').value.trim().toUpperCase() || null,
+                discount_type: discountType,
                 discount_amount: discountAmount,
-                start_date: document.getElementById('promo-start').value,
-                end_date: document.getElementById('promo-end').value
+                start_date: startDate,
+                end_date: endDate
             };
             try {
                 const res = await fetch('/api/v1/admin/promotions', {

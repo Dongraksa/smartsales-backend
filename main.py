@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 app = FastAPI(
     title="SmartSales Enterprise API",
@@ -133,6 +133,9 @@ promotions_db = [
         "title": "เซตคู่กาแฟ & ครัวซองต์สุดคุ้ม",
         "promo_type": "bundle",
         "product_ids": [1, 3],
+        "trigger_product_ids": [],
+        "coupon_code": None,
+        "discount_type": "fixed",
         "discount_amount": 15.0,
         "discount_text": "ซื้อคู่กันลด 15 บาท",
         "condition_summary": "อเมริกาโน่เย็น + ครัวซองต์เนยสด",
@@ -163,7 +166,10 @@ class OrderStatusUpdate(BaseModel):
 class PromotionSchema(BaseModel):
     title: str
     promo_type: str
-    product_ids: List[int]
+    product_ids: List[int] = Field(default_factory=list)
+    trigger_product_ids: List[int] = Field(default_factory=list)
+    coupon_code: Optional[str] = None
+    discount_type: str = "fixed"
     discount_amount: float
     start_date: str
     end_date: str
@@ -291,6 +297,8 @@ async def create_order(request: Request):
     requested_promo_ids = data.get("promotion_ids", []) if isinstance(data, dict) else []
     if not isinstance(requested_promo_ids, list):
         requested_promo_ids = []
+    coupon_code = str(data.get("coupon_code", "")).strip().upper() if isinstance(data, dict) else ""
+    cart_product_ids = set(product_subtotals)
     seen_promo_ids = set()
     for raw_promo_id in requested_promo_ids:
         try:
@@ -307,13 +315,30 @@ async def create_order(request: Request):
             continue
         try:
             product_ids = {int(product_id) for product_id in promo.get("product_ids", [])}
+            trigger_product_ids = {int(product_id) for product_id in promo.get("trigger_product_ids", [])}
             discount_amount = max(0.0, float(promo.get("discount_amount", 0)))
         except (TypeError, ValueError):
             continue
-        if not product_ids or not product_ids.issubset(product_subtotals):
+        if promo.get("promo_type") == "bundle":
+            if len(product_ids) < 2 or not product_ids.issubset(cart_product_ids):
+                continue
+            eligible_product_ids = product_ids
+        elif promo.get("promo_type") == "cross_sell":
+            if not (trigger_product_ids & cart_product_ids) or not (product_ids & cart_product_ids):
+                continue
+            eligible_product_ids = product_ids & cart_product_ids
+        elif promo.get("promo_type") == "discount_code":
+            expected_code = str(promo.get("coupon_code", "")).strip().upper()
+            if not expected_code or coupon_code != expected_code:
+                continue
+            eligible_product_ids = product_ids & cart_product_ids if product_ids else cart_product_ids
+        else:
             continue
-        eligible_subtotal = sum(product_subtotals[product_id] for product_id in product_ids)
-        applied_discount = min(discount_amount, eligible_subtotal)
+        eligible_subtotal = sum(product_subtotals[product_id] for product_id in eligible_product_ids)
+        if promo.get("discount_type", "fixed") == "percent":
+            applied_discount = eligible_subtotal * min(discount_amount, 100.0) / 100
+        else:
+            applied_discount = min(discount_amount, eligible_subtotal)
         if applied_discount > 0:
             total_discount += applied_discount
             applied_promotion_ids.append(promo["promo_id"])
@@ -833,6 +858,12 @@ def get_promotions():
 def create_promotion(promo: PromotionSchema):
     if not math.isfinite(promo.discount_amount) or promo.discount_amount <= 0:
         raise HTTPException(status_code=422, detail="Discount must be greater than zero")
+    if promo.discount_type not in {"fixed", "percent"}:
+        raise HTTPException(status_code=422, detail="Discount type must be fixed or percent")
+    if promo.discount_type == "percent" and promo.discount_amount > 100:
+        raise HTTPException(status_code=422, detail="Percentage discount cannot exceed 100")
+    if promo.promo_type not in {"bundle", "cross_sell", "discount_code"}:
+        raise HTTPException(status_code=422, detail="Unsupported promotion type")
     try:
         start_date = datetime.strptime(promo.start_date, "%Y-%m-%d").date()
         end_date = datetime.strptime(promo.end_date, "%Y-%m-%d").date()
@@ -840,21 +871,49 @@ def create_promotion(promo: PromotionSchema):
         raise HTTPException(status_code=422, detail="Dates must use YYYY-MM-DD format")
     if end_date < start_date:
         raise HTTPException(status_code=422, detail="End date must be on or after start date")
-    if not promo.product_ids or len(set(promo.product_ids)) != len(promo.product_ids):
-        raise HTTPException(status_code=422, detail="Select one or more unique products")
-    selected_products = [p for p in products_db if p["product_id"] in promo.product_ids]
-    if len(selected_products) != len(promo.product_ids) or any(p["stock_quantity"] <= 0 for p in selected_products):
+    if len(set(promo.product_ids)) != len(promo.product_ids) or len(set(promo.trigger_product_ids)) != len(promo.trigger_product_ids):
+        raise HTTPException(status_code=422, detail="Product selections must be unique")
+    if promo.promo_type == "bundle" and (len(promo.product_ids) < 2 or promo.trigger_product_ids):
+        raise HTTPException(status_code=422, detail="Bundle promotions require at least two products")
+    if promo.promo_type == "cross_sell":
+        if not promo.product_ids or not promo.trigger_product_ids:
+            raise HTTPException(status_code=422, detail="Cross-selling requires trigger and discounted products")
+        if set(promo.product_ids) & set(promo.trigger_product_ids):
+            raise HTTPException(status_code=422, detail="Trigger and discounted products must differ")
+    if promo.promo_type == "discount_code":
+        if not promo.coupon_code or not promo.coupon_code.strip():
+            raise HTTPException(status_code=422, detail="Coupon code is required")
+        promo.coupon_code = promo.coupon_code.strip().upper()
+        if any((p.get("coupon_code") or "").upper() == promo.coupon_code for p in promotions_db):
+            raise HTTPException(status_code=409, detail="Coupon code already exists")
+
+    selected_ids = set(promo.product_ids) | set(promo.trigger_product_ids)
+    selected_products = [p for p in products_db if p["product_id"] in selected_ids]
+    if len(selected_products) != len(selected_ids) or any(p["stock_quantity"] <= 0 for p in selected_products):
         raise HTTPException(status_code=400, detail="Selected products must exist and have stock")
 
     new_id = len(promotions_db) + 1
-    condition_summary = " + ".join(p["product_name"] for p in selected_products)
+    products_by_id = {p["product_id"]: p for p in selected_products}
+    target_names = [products_by_id[product_id]["product_name"] for product_id in promo.product_ids]
+    trigger_names = [products_by_id[product_id]["product_name"] for product_id in promo.trigger_product_ids]
+    if promo.promo_type == "bundle":
+        condition_summary = " + ".join(target_names)
+    elif promo.promo_type == "cross_sell":
+        condition_summary = f"เมื่อซื้อ {' / '.join(trigger_names)} รับส่วนลดสินค้า {' / '.join(target_names)}"
+    else:
+        condition_summary = "สินค้าทั้งหมด" if not target_names else " / ".join(target_names)
+        condition_summary = f"รหัส {promo.coupon_code}: {condition_summary}"
+    discount_label = f"ลด {promo.discount_amount:g}%" if promo.discount_type == "percent" else f"ลด {promo.discount_amount:g} บาท"
     new_promo = {
         "promo_id": new_id,
         "title": promo.title,
         "promo_type": promo.promo_type,
         "product_ids": promo.product_ids,
+        "trigger_product_ids": promo.trigger_product_ids,
+        "coupon_code": promo.coupon_code,
+        "discount_type": promo.discount_type,
         "discount_amount": promo.discount_amount,
-        "discount_text": f"ลด {promo.discount_amount:g} บาท",
+        "discount_text": discount_label,
         "condition_summary": condition_summary,
         "usage_count": 0,
         "is_active": True,
@@ -874,6 +933,11 @@ def create_win_back_coupon(data: WinBackCouponSchema):
         "promo_id": new_id,
         "title": f"คูปองต้อนรับกลับสำหรับคุณ {data.customer_name}",
         "promo_type": "discount_code",
+        "product_ids": [],
+        "trigger_product_ids": [],
+        "coupon_code": f"WELCOME{new_id}",
+        "discount_type": "fixed",
+        "discount_amount": data.discount_amount,
         "discount_text": f"รับส่วนลดทันที {int(data.discount_amount)} บาท",
         "condition_summary": f"สิทธิ์เฉพาะคุณ {data.customer_name}",
         "usage_count": 0,

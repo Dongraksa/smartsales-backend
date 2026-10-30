@@ -188,6 +188,16 @@
                 <div class="row g-2" id="active-promotions-list">
                     <div class="col-12 text-muted small py-1">กำลังโหลดโปรโมชันประจำวัน...</div>
                 </div>
+                <div class="row g-2 align-items-end mt-2">
+                    <div class="col-md-8">
+                        <label for="checkout-coupon-code" class="form-label small fw-semibold mb-1">มีรหัสคูปอง?</label>
+                        <input type="text" id="checkout-coupon-code" class="form-control form-control-sm" placeholder="กรอกรหัสคูปอง">
+                        <small id="coupon-code-feedback" class="text-muted"></small>
+                    </div>
+                    <div class="col-md-4">
+                        <button type="button" class="btn btn-outline-primary btn-sm w-100" onclick="applyCouponCode()">ใช้คูปอง</button>
+                    </div>
+                </div>
             </div>
             <div class="row g-4">
                 <!-- LEFT AREA: PRODUCTS MENU -->
@@ -434,6 +444,7 @@
     <script>
         let cart = [];
         let activePromotions = [];
+        let activeCouponCode = '';
         let selectedPaymentMethod = 'PromptPay';
         let successModalObj = null;
         let editProfileModalObj = null;
@@ -588,13 +599,13 @@
                 const res = await fetch('/api/v1/admin/promotions');
                 if (!res.ok) return;
                 const promos = await res.json();
-                const today = new Date().toISOString().slice(0, 10);
+                const today = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
                 activePromotions = promos.filter(p =>
                     p.is_active &&
                     p.start_date <= today &&
                     p.end_date >= today &&
                     Array.isArray(p.product_ids) &&
-                    p.product_ids.length > 0 &&
+                    (p.promo_type === 'discount_code' || p.product_ids.length > 0) &&
                     Number(p.discount_amount) > 0
                 );
                 const container = document.getElementById('active-promotions-list');
@@ -612,7 +623,7 @@
                                     <div class="fw-bold text-dark small"><i class="fa-solid fa-tag text-danger me-1"></i>${p.title}</div>
                                     <div class="text-muted small" style="font-size: 0.75rem;">${p.condition_summary}</div>
                                 </div>
-                                <span class="badge bg-success-subtle text-success fw-bold ms-2">${p.discount_text}</span>
+                                <span class="badge bg-success-subtle text-success fw-bold ms-2">${p.discount_text}${p.coupon_code ? ` (${p.coupon_code})` : ''}</span>
                             </div>
                         </div>
                     `;
@@ -712,20 +723,58 @@
         function calculatePromotionsDiscount(subtotal) {
             let discount = 0;
             getEligiblePromotions().forEach(promo => {
-                const productIds = new Set(promo.product_ids.map(Number));
+                const productIds = new Set((promo.product_ids || []).map(Number));
+                const eligibleProductIds = promo.promo_type === 'discount_code' && productIds.size === 0
+                    ? null
+                    : productIds;
                 const eligibleSubtotal = cart
-                    .filter(item => productIds.has(Number(item.product_id)))
+                    .filter(item => !eligibleProductIds || eligibleProductIds.has(Number(item.product_id)))
                     .reduce((sum, item) => sum + item.selling_price * item.quantity, 0);
-                discount += Math.min(Number(promo.discount_amount), eligibleSubtotal);
+                const promotionDiscount = promo.discount_type === 'percent'
+                    ? eligibleSubtotal * Math.min(Number(promo.discount_amount), 100) / 100
+                    : Number(promo.discount_amount);
+                discount += Math.min(promotionDiscount, eligibleSubtotal);
             });
             return Math.min(discount, subtotal);
         }
 
         function getEligiblePromotions() {
             const cartProductIds = new Set(cart.map(item => Number(item.product_id)));
-            return activePromotions.filter(promo =>
-                promo.product_ids.every(productId => cartProductIds.has(Number(productId)))
+            return activePromotions.filter(promo => {
+                const productIds = (promo.product_ids || []).map(Number);
+                if (promo.promo_type === 'bundle') {
+                    return productIds.length >= 2 && productIds.every(productId => cartProductIds.has(productId));
+                }
+                if (promo.promo_type === 'cross_sell') {
+                    const triggerProductIds = (promo.trigger_product_ids || []).map(Number);
+                    return triggerProductIds.some(productId => cartProductIds.has(productId)) &&
+                        productIds.some(productId => cartProductIds.has(productId));
+                }
+                if (promo.promo_type === 'discount_code') {
+                    const codeMatches = activeCouponCode && activeCouponCode === String(promo.coupon_code || '').toUpperCase();
+                    return Boolean(codeMatches) && (!productIds.length || productIds.some(productId => cartProductIds.has(productId)));
+                }
+                return false;
+            });
+        }
+
+        function applyCouponCode() {
+            const input = document.getElementById('checkout-coupon-code');
+            const feedback = document.getElementById('coupon-code-feedback');
+            const enteredCode = input.value.trim().toUpperCase();
+            const matchingPromo = activePromotions.find(promo =>
+                promo.promo_type === 'discount_code' && String(promo.coupon_code || '').toUpperCase() === enteredCode
             );
+            if (!matchingPromo) {
+                activeCouponCode = '';
+                feedback.textContent = 'ไม่พบคูปองนี้ หรือคูปองหมดอายุแล้ว';
+                feedback.className = 'text-danger small';
+            } else {
+                activeCouponCode = enteredCode;
+                feedback.textContent = `ใช้คูปอง ${enteredCode} แล้ว`;
+                feedback.className = 'text-success small';
+            }
+            updateCartUI();
         }
 
         function selectPaymentMethod(method, btnEl) {
@@ -747,7 +796,8 @@
                 customer_name: customerName,
                 items: cart,
                 payment_method: selectedPaymentMethod,
-                promotion_ids: getEligiblePromotions().map(promo => promo.promo_id)
+                promotion_ids: getEligiblePromotions().map(promo => promo.promo_id),
+                coupon_code: activeCouponCode
             };
 
             try {
