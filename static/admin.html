@@ -179,7 +179,7 @@
                 <!-- TAB 1: DASHBOARD SUMMARY -->
                 <div id="tab-dashboard" class="tab-content-item">
                     <div class="row g-4 mb-4">
-                        <div class="col-md-4">
+                        <div class="col-6 col-xl-3">
                             <div class="card-custom p-4 cursor-pointer" onclick="openRevenueModal()">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
@@ -195,7 +195,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-6 col-xl-3">
                             <div class="card-custom p-4">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
@@ -211,7 +211,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-6 col-xl-3">
                             <div class="card-custom p-4 cursor-pointer" onclick="openLowStockModal()">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
@@ -224,6 +224,22 @@
                                 </div>
                                 <div class="mt-3 text-warning small fw-semibold">
                                     <i class="fa-solid fa-box-open me-1"></i> ตรวจสอบสต็อกสินค้าต่ำ
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-xl-3">
+                            <div class="card-custom p-4 cursor-pointer" onclick="openExpiryModal()">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <p class="text-muted small fw-semibold mb-1">สินค้าใกล้หมดอายุ (7 วัน)</p>
+                                        <h3 class="fw-bold text-dark mb-0" id="dash-expiring-count">0 รายการ</h3>
+                                    </div>
+                                    <div class="icon-box bg-danger-subtle text-danger">
+                                        <i class="fa-solid fa-calendar-xmark"></i>
+                                    </div>
+                                </div>
+                                <div class="mt-3 text-danger small fw-semibold">
+                                    <i class="fa-solid fa-clock me-1"></i> ตรวจสอบสินค้าใกล้หมดอายุ
                                 </div>
                             </div>
                         </div>
@@ -604,6 +620,29 @@
         </div>
     </div>
 
+    <div class="modal fade" id="expiryModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content rounded-4 border-0 p-3">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="fw-bold mb-0 text-danger"><i class="fa-solid fa-calendar-xmark me-2"></i>สินค้าใกล้หมดอายุหรือหมดอายุแล้ว</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-3">
+                    <div class="small text-muted mb-2">แสดงสินค้าที่มีสต็อกและจะหมดอายุภายใน 7 วัน รวมถึงสินค้าที่หมดอายุแล้ว</div>
+                    <div class="list-group list-group-flush mb-3" id="expiry-warning-list" style="max-height: 350px; overflow-y: auto;">
+                        <div class="text-center py-3 text-muted">กำลังตรวจสอบวันหมดอายุ...</div>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center pt-3 border-top">
+                        <button class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ปิดหน้าต่าง</button>
+                        <button class="btn btn-primary rounded-pill px-4" onclick="goToStockTab()">
+                            <i class="fa-solid fa-boxes-stacked me-2"></i>ไปยังหน้าจัดการสต็อก
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="modal fade" id="promoModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content rounded-4 border-0 p-2">
@@ -837,6 +876,7 @@
         let orderDetailsModalObj = null;
         let revenueModalObj = null;
         let lowStockModalObj = null;
+        let expiryModalObj = null;
         let promoModalObj = null;
         let currentProducts = [];
         let currentPromoRecommendations = [];
@@ -860,11 +900,13 @@
                 const elOrder = document.getElementById('orderDetailsModal');
                 const elRev = document.getElementById('revenueModal');
                 const elLow = document.getElementById('lowStockModal');
+                const elExpiry = document.getElementById('expiryModal');
                 const elPromo = document.getElementById('promoModal');
                 if (elProd) productModalObj = new bootstrap.Modal(elProd);
                 if (elOrder) orderDetailsModalObj = new bootstrap.Modal(elOrder);
                 if (elRev) revenueModalObj = new bootstrap.Modal(elRev);
                 if (elLow) lowStockModalObj = new bootstrap.Modal(elLow);
+                if (elExpiry) expiryModalObj = new bootstrap.Modal(elExpiry);
                 if (elPromo) promoModalObj = new bootstrap.Modal(elPromo);
                 if (elRev) {
                     elRev.addEventListener('shown.bs.modal', () => revenueChartInstance?.resize());
@@ -1158,7 +1200,63 @@
                 if (!lowStockFound && lowStockList) {
                     lowStockList.innerHTML = '<div class="text-success text-center py-4 fs-5"><i class="fa-solid fa-circle-check me-2"></i>ไม่มีสินค้าถึงจุดเติมสต็อก</div>';
                 }
+                updateExpiryAlerts(currentProducts);
             } catch (err) { console.error("Products error:", err); }
+        }
+
+        function getExpiryWarnings(products) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const cutoff = new Date(today);
+            cutoff.setDate(cutoff.getDate() + 7);
+
+            return products
+                .filter(product => Number(product.stock_quantity) > 0 && product.expiration_date)
+                .map(product => ({
+                    product,
+                    expiryDate: new Date(`${product.expiration_date}T00:00:00`)
+                }))
+                .filter(item => !Number.isNaN(item.expiryDate.getTime()) && item.expiryDate <= cutoff)
+                .sort((a, b) => a.expiryDate - b.expiryDate)
+                .map(item => ({
+                    ...item,
+                    daysLeft: Math.round((item.expiryDate - today) / 86400000)
+                }));
+        }
+
+        function updateExpiryAlerts(products) {
+            const warnings = getExpiryWarnings(products);
+            const count = document.getElementById('dash-expiring-count');
+            const list = document.getElementById('expiry-warning-list');
+            if (count) count.innerText = `${warnings.length} รายการ`;
+            if (!list) return;
+            if (warnings.length === 0) {
+                list.innerHTML = '<div class="text-success text-center py-4"><i class="fa-solid fa-circle-check me-2"></i>ไม่มีสินค้าใกล้หมดอายุใน 7 วัน</div>';
+                return;
+            }
+
+            list.innerHTML = warnings.map(({ product, expiryDate, daysLeft }) => {
+                const expired = daysLeft < 0;
+                const urgencyText = expired
+                    ? `หมดอายุแล้ว ${Math.abs(daysLeft)} วัน`
+                    : daysLeft === 0
+                        ? 'หมดอายุวันนี้'
+                        : `หมดอายุในอีก ${daysLeft} วัน`;
+                const dateText = expiryDate.toLocaleDateString('th-TH', {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric'
+                });
+                return `
+                    <div class="d-flex align-items-center justify-content-between gap-3 p-3 border-bottom">
+                        <div class="min-w-0">
+                            <div class="fw-semibold text-dark text-truncate">${escapeHtml(product.product_name)}</div>
+                            <small class="text-muted">คงเหลือ ${product.stock_quantity} ชิ้น · วันหมดอายุ ${dateText}</small>
+                        </div>
+                        <span class="badge ${expired || daysLeft === 0 ? 'bg-danger' : 'bg-warning text-dark'} text-nowrap">${urgencyText}</span>
+                    </div>
+                `;
+            }).join('');
         }
 
         function escapeHtml(value) {
@@ -1737,6 +1835,7 @@
 
         function openRevenueModal() { if (revenueModalObj) revenueModalObj.show(); }
         function openLowStockModal() { if (lowStockModalObj) lowStockModalObj.show(); }
+        function openExpiryModal() { if (expiryModalObj) expiryModalObj.show(); }
 
         function getBadgeClass(status) {
             switch(status) {
