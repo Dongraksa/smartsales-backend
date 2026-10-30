@@ -501,38 +501,105 @@ def delete_product(product_id: int):
 
 # --- DASHBOARD & ANALYTICS ---
 @app.get("/api/v1/admin/dashboard-summary")
-def get_dashboard_summary(period: str = "all"):
+def get_dashboard_summary(
+    period: str = "all",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
+):
     now = datetime.now() + timedelta(hours=7)
+    custom_range = start_date is not None or end_date is not None
+    range_start = None
+    range_end = None
+    if custom_range:
+        if not start_date or not end_date:
+            raise HTTPException(status_code=422, detail="Both start_date and end_date are required")
+        try:
+            range_start = datetime.strptime(start_date, "%Y-%m-%d").date()
+            range_end = datetime.strptime(end_date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Dates must use YYYY-MM-DD format")
+        if range_end < range_start:
+            raise HTTPException(status_code=422, detail="end_date must be on or after start_date")
+
     valid_orders = []
     for o in orders_db:
-        if o.get("status") in ["Paid", "Completed"]:
-            try:
-                ts = datetime.strptime(o["timestamp"], "%Y-%m-%d %H:%M:%S")
-                if period == "daily" and ts.date() != now.date():
-                    continue
-                elif period == "weekly" and ts < (now - timedelta(days=7)):
-                    continue
-                elif period == "monthly" and ts < (now - timedelta(days=30)):
-                    continue
-                valid_orders.append(o)
-            except Exception:
-                valid_orders.append(o)
-    total_revenue = sum(o["total_amount"] for o in valid_orders)
+        if o.get("status") not in ["Paid", "Completed"]:
+            continue
+        try:
+            order_time = datetime.strptime(o["timestamp"], "%Y-%m-%d %H:%M:%S")
+        except (KeyError, TypeError, ValueError):
+            continue
+        if custom_range:
+            if not range_start <= order_time.date() <= range_end:
+                continue
+        elif period == "daily" and order_time.date() != now.date():
+            continue
+        elif period == "weekly" and order_time < now - timedelta(days=7):
+            continue
+        elif period == "monthly" and order_time < now - timedelta(days=30):
+            continue
+        valid_orders.append(o)
+
+    daily_totals = defaultdict(lambda: {"revenue": 0.0, "cost": 0.0})
+    for order in valid_orders:
+        order_time = datetime.strptime(order["timestamp"], "%Y-%m-%d %H:%M:%S")
+        day_summary = daily_totals[order_time.strftime("%Y-%m-%d")]
+        order_revenue = float(order.get("total_amount", 0))
+        day_summary["revenue"] += order_revenue
+        for item in order.get("items", []):
+            product_id = item.get("product_id")
+            product = next((p for p in products_db if product_id and p["product_id"] == product_id), None)
+            if not product:
+                product_name = item.get("product_name")
+                product = next((p for p in products_db if p["product_name"] == product_name), None)
+            quantity = int(item.get("quantity", 1))
+            day_summary["cost"] += (product["cost_price"] if product else 0.0) * quantity
+
+    total_revenue = sum(float(o.get("total_amount", 0)) for o in valid_orders)
     total_orders = len(valid_orders)
-    total_cost = 0.0
-    for o in valid_orders:
-        for item in o.get("items", []):
-            prod = next((p for p in products_db if p["product_name"] == item["product_name"]), None)
-            cost_price = prod["cost_price"] if prod else 0.0
-            total_cost += cost_price * item.get("quantity", 1)
+    total_cost = sum(day["cost"] for day in daily_totals.values())
     total_profit = total_revenue - total_cost
     low_stock_count = len([p for p in products_db if p["stock_quantity"] < p.get("reorder_threshold", 20)])
+    if custom_range:
+        series_start = range_start
+        series_end = range_end
+    elif period == "daily":
+        series_start = now.date()
+        series_end = now.date()
+    elif period == "weekly":
+        series_start = now.date() - timedelta(days=6)
+        series_end = now.date()
+    elif period == "monthly":
+        series_start = now.date() - timedelta(days=29)
+        series_end = now.date()
+    else:
+        series_start = None
+        series_end = now.date()
+
+    if series_start is None:
+        series_dates = sorted(daily_totals)
+    else:
+        series_dates = []
+        current_date = series_start
+        while current_date <= series_end:
+            series_dates.append(current_date.strftime("%Y-%m-%d"))
+            current_date += timedelta(days=1)
+
     return {
         "total_revenue": round(total_revenue, 2),
         "total_cost": round(total_cost, 2),
         "total_profit": round(total_profit, 2),
         "total_orders": total_orders,
-        "low_stock_count": low_stock_count
+        "low_stock_count": low_stock_count,
+        "daily_series": [
+            {
+                "date": day,
+                "revenue": round(values["revenue"], 2),
+                "profit": round(values["revenue"] - values["cost"], 2)
+            }
+            for day in series_dates
+            for values in [daily_totals.get(day, {"revenue": 0.0, "cost": 0.0})]
+        ]
     }
 
 @app.get("/api/v1/admin/orders")

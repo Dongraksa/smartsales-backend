@@ -659,6 +659,19 @@
                         <button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="filterPeriod('weekly', this)">รายสัปดาห์ (7 วัน)</button>
                         <button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="filterPeriod('monthly', this)">รายเดือน (30 วัน)</button>
                     </div>
+                    <div class="row g-2 align-items-end mb-4">
+                        <div class="col-md-4">
+                            <label for="revenue-start-date" class="form-label small fw-semibold">ตั้งแต่วันที่</label>
+                            <input type="date" id="revenue-start-date" class="form-control">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="revenue-end-date" class="form-label small fw-semibold">ถึงวันที่</label>
+                            <input type="date" id="revenue-end-date" class="form-control">
+                        </div>
+                        <div class="col-md-4">
+                            <button type="button" class="btn btn-primary w-100" onclick="applyRevenueDateRange()">ดูสรุปช่วงวันที่</button>
+                        </div>
+                    </div>
                     <div class="row g-3 text-center mb-3">
                         <div class="col-md-4">
                             <div class="p-3 bg-light rounded-4 border">
@@ -677,6 +690,12 @@
                                 <small class="text-success-emphasis fw-bold">กำไรสุทธิ</small>
                                 <h3 class="fw-bold text-success mt-1 mb-0" id="rev-modal-profit">0.00 ฿</h3>
                             </div>
+                        </div>
+                    </div>
+                    <div class="border rounded-3 p-3" style="height: 300px;">
+                        <canvas id="revenue-trend-chart" aria-label="กราฟเส้นยอดขายและกำไรรายวัน" role="img"></canvas>
+                        <div id="revenue-chart-empty" class="d-none h-100 align-items-center justify-content-center text-muted small">
+                            ไม่มีรายการขายในช่วงวันที่เลือก
                         </div>
                     </div>
                 </div>
@@ -790,6 +809,7 @@
         let activeModalSaleId = null;
         let currentProducts = [];
         let currentPromoRecommendations = [];
+        let revenueChartInstance = null;
         let isUserEditingStatus = false;
         let selectedPeriod = 'all';
 
@@ -816,6 +836,9 @@
                 if (elRev) revenueModalObj = new bootstrap.Modal(elRev);
                 if (elLow) lowStockModalObj = new bootstrap.Modal(elLow);
                 if (elPromo) promoModalObj = new bootstrap.Modal(elPromo);
+                if (elRev) {
+                    elRev.addEventListener('shown.bs.modal', () => revenueChartInstance?.resize());
+                }
             }
 
             const btnSaveStatus = document.getElementById('modal-save-status-btn');
@@ -887,7 +910,12 @@
 
         async function fetchSummary() {
             try {
-                const res = await fetch(`/api/v1/admin/dashboard-summary?period=${selectedPeriod}&_t=${Date.now()}`);
+                const params = new URLSearchParams({ period: selectedPeriod, _t: String(Date.now()) });
+                if (selectedPeriod === 'custom') {
+                    params.set('start_date', document.getElementById('revenue-start-date').value);
+                    params.set('end_date', document.getElementById('revenue-end-date').value);
+                }
+                const res = await fetch(`/api/v1/admin/dashboard-summary?${params}`);
                 if (!res.ok) return;
                 const data = await res.json();
                 
@@ -901,14 +929,81 @@
                 if (mRev) mRev.innerText = (data.total_revenue || 0).toFixed(2) + ' ฿';
                 if (mCost) mCost.innerText = (data.total_cost || 0).toFixed(2) + ' ฿';
                 if (mProfit) mProfit.innerText = (data.total_profit || 0).toFixed(2) + ' ฿';
+                renderRevenueChart(data.daily_series || []);
             } catch (err) { console.error("Summary error:", err); }
         }
 
         function filterPeriod(period, btn) {
             selectedPeriod = period;
+            document.getElementById('revenue-start-date').value = '';
+            document.getElementById('revenue-end-date').value = '';
             document.querySelectorAll('#revenueModal .btn-outline-primary').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             fetchSummary();
+        }
+
+        function applyRevenueDateRange() {
+            const startDate = document.getElementById('revenue-start-date').value;
+            const endDate = document.getElementById('revenue-end-date').value;
+            if (!startDate || !endDate) {
+                alert('เลือกวันที่เริ่มต้นและวันที่สิ้นสุดก่อน');
+                return;
+            }
+            if (endDate < startDate) {
+                alert('วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่มต้น');
+                return;
+            }
+            selectedPeriod = 'custom';
+            document.querySelectorAll('#revenueModal .btn-outline-primary').forEach(b => b.classList.remove('active'));
+            fetchSummary();
+        }
+
+        function renderRevenueChart(dailySeries) {
+            const canvas = document.getElementById('revenue-trend-chart');
+            const emptyState = document.getElementById('revenue-chart-empty');
+            if (!canvas || typeof Chart === 'undefined') return;
+            if (dailySeries.length === 0) {
+                if (revenueChartInstance) {
+                    revenueChartInstance.destroy();
+                    revenueChartInstance = null;
+                }
+                canvas.classList.add('d-none');
+                emptyState?.classList.remove('d-none');
+                emptyState?.classList.add('d-flex');
+                return;
+            }
+            canvas.classList.remove('d-none');
+            emptyState?.classList.add('d-none');
+            emptyState?.classList.remove('d-flex');
+            const labels = dailySeries.map(day => day.date);
+            const revenue = dailySeries.map(day => day.revenue);
+            const profit = dailySeries.map(day => day.profit);
+            if (revenueChartInstance) {
+                revenueChartInstance.data.labels = labels;
+                revenueChartInstance.data.datasets[0].data = revenue;
+                revenueChartInstance.data.datasets[1].data = profit;
+                revenueChartInstance.update();
+                return;
+            }
+            revenueChartInstance = new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        { label: 'ยอดขาย', data: revenue, borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.12)', tension: 0.25, fill: true },
+                        { label: 'กำไร', data: profit, borderColor: '#16a34a', backgroundColor: 'rgba(22, 163, 74, 0.08)', tension: 0.25, fill: false }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { intersect: false, mode: 'index' },
+                    scales: {
+                        x: { ticks: { maxTicksLimit: 10 } },
+                        y: { beginAtZero: true, ticks: { callback: value => `${Number(value).toLocaleString()} ฿` } }
+                    }
+                }
+            });
         }
 
         async function fetchOrders() {
