@@ -257,11 +257,13 @@
                                         <th>ราคาทุน</th>
                                         <th>ราคาขาย</th>
                                         <th>สต็อกคงเหลือ</th>
+                                        <th>วันผลิต</th>
+                                        <th>วันหมดอายุ</th>
                                         <th>การจัดการ</th>
                                     </tr>
                                 </thead>
                                 <tbody id="full-products-table-body">
-                                    <tr><td colspan="7" class="text-center py-4 text-muted">กำลังดึงข้อมูลสินค้า...</td></tr>
+                                    <tr><td colspan="9" class="text-center py-4 text-muted">กำลังดึงข้อมูลสินค้า...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -700,6 +702,16 @@
                             <label class="form-label small fw-semibold">จำนวนสต็อก</label>
                             <input type="number" id="prod-stock" class="form-control rounded-3" required>
                         </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label small fw-semibold">วันผลิต</label>
+                                <input type="date" id="prod-manufacture-date" class="form-control rounded-3" required>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small fw-semibold">วันหมดอายุ</label>
+                                <input type="date" id="prod-expiration-date" class="form-control rounded-3" required>
+                            </div>
+                        </div>
                         <div class="mb-3">
                             <label class="form-label small fw-semibold">รูปภาพสินค้า <small class="text-muted">(หากไม่เลือกใหม่จะใช้รูปเดิม)</small></label>
                             <input type="file" id="prod-image" class="form-control rounded-3" accept="image/*">
@@ -935,6 +947,8 @@
                             <td>${(p.cost_price || 0).toFixed(2)} ฿</td>
                             <td>${(p.selling_price || 0).toFixed(2)} ฿</td>
                             <td><span class="badge ${p.stock_quantity < 20 ? 'bg-warning text-dark' : 'bg-primary'}">${p.stock_quantity} ชิ้น</span></td>
+                            <td>${p.manufacture_date || '-'}</td>
+                            <td>${p.expiration_date || '-'}</td>
                             <td>
                                 <div class="d-flex gap-1">
                                     <button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="openEditProductModal(${p.product_id})">แก้ไข</button>
@@ -1339,6 +1353,8 @@
         function openAddProductModal() {
             document.getElementById('prod-id').value = '';
             document.getElementById('productForm').reset();
+            document.getElementById('prod-manufacture-date').required = true;
+            document.getElementById('prod-expiration-date').required = true;
             document.getElementById('productModalTitle').innerText = 'เพิ่มสินค้าใหม่';
             document.getElementById('prod-submit-btn').innerText = 'บันทึกข้อมูลสินค้า';
             if (productModalObj) productModalObj.show();
@@ -1352,6 +1368,10 @@
             document.getElementById('prod-cost').value = prod.cost_price;
             document.getElementById('prod-price').value = prod.selling_price;
             document.getElementById('prod-stock').value = prod.stock_quantity;
+            document.getElementById('prod-manufacture-date').value = prod.manufacture_date || '';
+            document.getElementById('prod-expiration-date').value = prod.expiration_date || '';
+            document.getElementById('prod-manufacture-date').required = false;
+            document.getElementById('prod-expiration-date').required = false;
             document.getElementById('prod-image').value = '';
             document.getElementById('productModalTitle').innerText = `แก้ไขสินค้า (ID: ${prod.product_id})`;
             document.getElementById('prod-submit-btn').innerText = 'อัปเดตข้อมูลสินค้า';
@@ -1366,6 +1386,8 @@
             formData.append('cost_price', document.getElementById('prod-cost').value);
             formData.append('selling_price', document.getElementById('prod-price').value);
             formData.append('stock_quantity', document.getElementById('prod-stock').value);
+            formData.append('manufacture_date', document.getElementById('prod-manufacture-date').value);
+            formData.append('expiration_date', document.getElementById('prod-expiration-date').value);
             const imgFile = document.getElementById('prod-image').files[0];
             if (imgFile) formData.append('image_file', imgFile);
             try {

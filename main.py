@@ -307,6 +307,8 @@ def create_product(
     stock_quantity: int = Form(...),
     lead_time_days: int = Form(3),
     safety_stock: int = Form(10),
+    manufacture_date: str = Form(""),
+    expiration_date: str = Form(""),
     image_file: Optional[UploadFile] = File(None)
 ):
     new_id = len(products_db) + 1
@@ -324,6 +326,8 @@ def create_product(
         "cost_price": cost_price,
         "selling_price": selling_price,
         "stock_quantity": stock_quantity,
+        "manufacture_date": manufacture_date,
+        "expiration_date": expiration_date,
         "lead_time_days": lead_time_days,
         "safety_stock": safety_stock,
         "image_url": image_url
@@ -340,6 +344,8 @@ def update_product(
     stock_quantity: int = Form(...),
     lead_time_days: int = Form(3),
     safety_stock: int = Form(10),
+    manufacture_date: str = Form(""),
+    expiration_date: str = Form(""),
     image_file: Optional[UploadFile] = File(None)
 ):
     prod = next((p for p in products_db if p["product_id"] == product_id), None)
@@ -350,6 +356,8 @@ def update_product(
     prod["cost_price"] = cost_price
     prod["selling_price"] = selling_price
     prod["stock_quantity"] = stock_quantity
+    prod["manufacture_date"] = manufacture_date
+    prod["expiration_date"] = expiration_date
     prod["lead_time_days"] = lead_time_days
     prod["safety_stock"] = safety_stock
     if image_file:
