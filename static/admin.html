@@ -287,13 +287,14 @@
                                         <th>ID สินค้า</th>
                                         <th>ชื่อสินค้า</th>
                                         <th class="text-center">สต็อกปัจจุบัน</th>
+                                        <th class="text-center">ระยะเวลาจัดส่ง (Lead Time)</th>
                                         <th class="text-center">สต็อกสำรอง (Safety Stock)</th>
                                         <th class="text-center">จุดสั่งซื้อเติม (ROP)</th>
                                         <th class="text-center">สถานะการสั่งเติม</th>
                                     </tr>
                                 </thead>
                                 <tbody id="rop-tbody">
-                                    <tr><td colspan="6" class="text-center py-4 text-muted">กำลังคำนวณจุด ROP...</td></tr>
+                                    <tr><td colspan="7" class="text-center py-4 text-muted">กำลังคำนวณจุด ROP...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -706,6 +707,10 @@
                             <label class="form-label small fw-semibold">จุดเติมสต็อก (ชิ้น)</label>
                             <input type="number" id="prod-reorder-point" class="form-control rounded-3" min="0" value="20" required>
                         </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold">ระยะเวลาจัดส่ง (วัน)</label>
+                            <input type="number" id="prod-lead-time" class="form-control rounded-3" min="0" value="3" required>
+                        </div>
                         <div class="row g-2 mb-3">
                             <div class="col-6">
                                 <label class="form-label small fw-semibold">วันผลิต</label>
@@ -1008,6 +1013,7 @@
                                 <td>#${item.product_id}</td>
                                 <td class="fw-bold">${item.product_name}</td>
                                 <td class="text-center font-bold">${item.current_stock} ชิ้น</td>
+                                <td class="text-center">${item.lead_time_days} วัน</td>
                                 <td class="text-center">${item.safety_stock} ชิ้น</td>
                                 <td class="text-center fw-bold text-primary">${item.reorder_point} ชิ้น</td>
                                 <td class="text-center">${badge}</td>
@@ -1015,7 +1021,7 @@
                         `;
                     });
                 } else {
-                    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">ไม่พบข้อมูลสำหรับคำนวณ ROP</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">ไม่พบข้อมูลสำหรับคำนวณ ROP</td></tr>';
                 }
             } catch (e) { console.error("Fetch ROP Error:", e); }
         }
@@ -1377,6 +1383,7 @@
             document.getElementById('prod-price').value = prod.selling_price;
             document.getElementById('prod-stock').value = prod.stock_quantity;
             document.getElementById('prod-reorder-point').value = prod.reorder_threshold ?? 20;
+            document.getElementById('prod-lead-time').value = prod.lead_time_days ?? 3;
             document.getElementById('prod-manufacture-date').value = prod.manufacture_date || '';
             document.getElementById('prod-expiration-date').value = prod.expiration_date || '';
             document.getElementById('prod-manufacture-date').required = false;
@@ -1396,6 +1403,7 @@
             formData.append('selling_price', document.getElementById('prod-price').value);
             formData.append('stock_quantity', document.getElementById('prod-stock').value);
             formData.append('reorder_threshold', document.getElementById('prod-reorder-point').value);
+            formData.append('lead_time_days', document.getElementById('prod-lead-time').value);
             formData.append('manufacture_date', document.getElementById('prod-manufacture-date').value);
             formData.append('expiration_date', document.getElementById('prod-expiration-date').value);
             const imgFile = document.getElementById('prod-image').files[0];
