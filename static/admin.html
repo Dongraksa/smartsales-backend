@@ -789,6 +789,7 @@
         let promoModalObj = null;
         let activeModalSaleId = null;
         let currentProducts = [];
+        let currentPromoRecommendations = [];
         let isUserEditingStatus = false;
         let selectedPeriod = 'all';
 
@@ -1235,6 +1236,7 @@
                 const recCountEl = document.getElementById('promo-ai-rec-count');
 
                 if (data.status === 'success' && data.recommendations.length > 0) {
+                    currentPromoRecommendations = data.recommendations;
                     if (recCountEl) recCountEl.innerText = `${data.recommendations.length} รายการ`;
                     
                     let htmlContent = '';
@@ -1244,15 +1246,15 @@
                                 <div class="p-3 rounded-4 border bg-white h-100 d-flex flex-column justify-content-between shadow-sm">
                                     <div>
                                         <div class="d-flex justify-content-between align-items-center mb-2">
-                                            <span class="badge bg-primary-subtle text-primary fw-bold px-2 py-1">${rec.promo_type}</span>
-                                            <span class="fw-bold text-success fs-6">${rec.discount_text}</span>
+                                            <span class="badge bg-primary-subtle text-primary fw-bold px-2 py-1">${escapeHtml(rec.promo_type)}</span>
+                                            <span class="fw-bold text-success fs-6">${escapeHtml(rec.discount_text)}</span>
                                         </div>
-                                        <h6 class="fw-bold text-dark mb-1">${rec.title}</h6>
-                                        <p class="small text-muted mb-2">📌 <strong>เงื่อนไข:</strong> ${rec.condition_summary}</p>
-                                        <p class="small text-secondary italic mb-3">💡 <i>${rec.reason}</i></p>
+                                        <h6 class="fw-bold text-dark mb-1">${escapeHtml(rec.title)}</h6>
+                                        <p class="small text-muted mb-2">📌 <strong>เงื่อนไข:</strong> ${escapeHtml(rec.condition_summary)}</p>
+                                        <p class="small text-secondary italic mb-3">💡 <i>${escapeHtml(rec.reason)}</i></p>
                                     </div>
                                     <button class="btn btn-sm btn-primary rounded-pill w-100 py-2 fw-semibold" 
-                                            onclick="applyAIRecommendation('${rec.title}', '${rec.promo_type}', '${rec.discount_text}', '${rec.condition_summary}')">
+                                            onclick="applyAIRecommendation(${Number(rec.rec_id)})">
                                         ⚡ สร้างโปรโมชันนี้ทันที
                                     </button>
                                 </div>
@@ -1263,6 +1265,7 @@
                     if (promoContainer) promoContainer.innerHTML = htmlContent;
                     if (dashContainer) dashContainer.innerHTML = htmlContent;
                 } else {
+                    currentPromoRecommendations = [];
                     if (recCountEl) recCountEl.innerText = '0 รายการ';
                     if (promoContainer) promoContainer.innerHTML = '<div class="col-12 text-center py-3 text-muted">ยังไม่มีข้อเสนอแนะนำในขณะนี้</div>';
                     if (dashContainer) dashContainer.innerHTML = '<div class="col-12 text-center py-2 text-muted">ยังไม่มีข้อเสนอแนะนำในขณะนี้</div>';
@@ -1272,15 +1275,24 @@
             }
         }
 
-        async function applyAIRecommendation(title, promo_type, discount_text, condition_summary) {
+        async function applyAIRecommendation(recommendationId) {
+            const recommendation = currentPromoRecommendations.find(rec => Number(rec.rec_id) === Number(recommendationId));
+            if (!recommendation) {
+                alert('ไม่พบข้อมูลโปรโมชันแนะนำ กรุณารีเฟรชคำแนะนำ');
+                return;
+            }
             const today = new Date().toISOString().split('T')[0];
             const nextMonth = new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0];
 
             const payload = {
-                title: title,
-                promo_type: promo_type,
-                discount_text: discount_text,
-                condition_summary: condition_summary,
+                title: recommendation.title,
+                promo_type: recommendation.promo_type,
+                product_ids: recommendation.product_ids,
+                trigger_product_ids: recommendation.trigger_product_ids || [],
+                minimum_spend_amount: recommendation.minimum_spend_amount || 0,
+                coupon_code: null,
+                discount_type: recommendation.discount_type,
+                discount_amount: recommendation.discount_amount,
                 start_date: today,
                 end_date: nextMonth
             };
@@ -1295,8 +1307,10 @@
                     alert('🎉 สร้างและเปิดใช้งานโปรโมชันที่ AI แนะนำเข้าสู่ระบบเรียบร้อยแล้ว!');
                     switchTab('promotions');
                     fetchPromotions();
+                    loadAIRecommendations();
                 } else {
-                    alert('ไม่สามารถสร้างโปรโมชันได้');
+                    const error = await res.json().catch(() => ({}));
+                    alert(error.detail || 'ไม่สามารถสร้างโปรโมชันได้');
                 }
             } catch (err) {
                 alert('เกิดข้อผิดพลาดในการสร้างโปรโมชัน');
