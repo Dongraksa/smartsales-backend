@@ -57,6 +57,7 @@ products_db = [
         "cost_price": 25.0,
         "selling_price": 55.0,
         "stock_quantity": 45,
+        "reorder_threshold": 20,
         "image_url": "https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=300",
         "lead_time_days": 3,
         "safety_stock": 10
@@ -67,6 +68,7 @@ products_db = [
         "cost_price": 30.0,
         "selling_price": 65.0,
         "stock_quantity": 12,
+        "reorder_threshold": 20,
         "image_url": "https://images.unsplash.com/photo-1570968915860-54d5c301fa9f?w=300",
         "lead_time_days": 4,
         "safety_stock": 15
@@ -77,6 +79,7 @@ products_db = [
         "cost_price": 20.0,
         "selling_price": 45.0,
         "stock_quantity": 8,
+        "reorder_threshold": 20,
         "image_url": "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=300",
         "lead_time_days": 2,
         "safety_stock": 10
@@ -305,6 +308,7 @@ def create_product(
     cost_price: float = Form(...),
     selling_price: float = Form(...),
     stock_quantity: int = Form(...),
+    reorder_threshold: int = Form(20, ge=0),
     lead_time_days: int = Form(3),
     safety_stock: int = Form(10),
     manufacture_date: str = Form(""),
@@ -326,6 +330,7 @@ def create_product(
         "cost_price": cost_price,
         "selling_price": selling_price,
         "stock_quantity": stock_quantity,
+        "reorder_threshold": reorder_threshold,
         "manufacture_date": manufacture_date,
         "expiration_date": expiration_date,
         "lead_time_days": lead_time_days,
@@ -342,6 +347,7 @@ def update_product(
     cost_price: float = Form(...),
     selling_price: float = Form(...),
     stock_quantity: int = Form(...),
+    reorder_threshold: Optional[int] = Form(None, ge=0),
     lead_time_days: int = Form(3),
     safety_stock: int = Form(10),
     manufacture_date: str = Form(""),
@@ -356,6 +362,8 @@ def update_product(
     prod["cost_price"] = cost_price
     prod["selling_price"] = selling_price
     prod["stock_quantity"] = stock_quantity
+    if reorder_threshold is not None:
+        prod["reorder_threshold"] = reorder_threshold
     prod["manufacture_date"] = manufacture_date
     prod["expiration_date"] = expiration_date
     prod["lead_time_days"] = lead_time_days
@@ -401,7 +409,7 @@ def get_dashboard_summary(period: str = "all"):
             cost_price = prod["cost_price"] if prod else 0.0
             total_cost += cost_price * item.get("quantity", 1)
     total_profit = total_revenue - total_cost
-    low_stock_count = len([p for p in products_db if p["stock_quantity"] < 20])
+    low_stock_count = len([p for p in products_db if p["stock_quantity"] < p.get("reorder_threshold", 20)])
     return {
         "total_revenue": round(total_revenue, 2),
         "total_cost": round(total_cost, 2),

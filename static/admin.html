@@ -159,7 +159,7 @@
                             <div class="card-custom p-4 cursor-pointer" onclick="openLowStockModal()">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
-                                        <p class="text-muted small fw-semibold mb-1">สินค้าต้องเติมสต็อก (&lt; 20 ชิ้น)</p>
+                                        <p class="text-muted small fw-semibold mb-1">สินค้าถึงจุดเติมสต็อก</p>
                                         <h3 class="fw-bold text-dark mb-0" id="dash-low-stock-count">0 รายการ</h3>
                                     </div>
                                     <div class="icon-box bg-warning-subtle text-warning">
@@ -257,13 +257,14 @@
                                         <th>ราคาทุน</th>
                                         <th>ราคาขาย</th>
                                         <th>สต็อกคงเหลือ</th>
+                                        <th>จุดเติมสต็อก</th>
                                         <th>วันผลิต</th>
                                         <th>วันหมดอายุ</th>
                                         <th>การจัดการ</th>
                                     </tr>
                                 </thead>
                                 <tbody id="full-products-table-body">
-                                    <tr><td colspan="9" class="text-center py-4 text-muted">กำลังดึงข้อมูลสินค้า...</td></tr>
+                                    <tr><td colspan="10" class="text-center py-4 text-muted">กำลังดึงข้อมูลสินค้า...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -537,7 +538,7 @@
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content rounded-4 border-0 p-3">
                 <div class="modal-header border-0 pb-0">
-                    <h5 class="fw-bold mb-0 text-warning"><i class="fa-solid fa-triangle-exclamation me-2"></i>รายการสินค้าสต็อกต่ำกว่า 20 ชิ้น</h5>
+                    <h5 class="fw-bold mb-0 text-warning"><i class="fa-solid fa-triangle-exclamation me-2"></i>รายการสินค้าถึงจุดเติมสต็อก</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-3">
@@ -701,6 +702,10 @@
                         <div class="mb-3">
                             <label class="form-label small fw-semibold">จำนวนสต็อก</label>
                             <input type="number" id="prod-stock" class="form-control rounded-3" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold">จุดเติมสต็อก (ชิ้น)</label>
+                            <input type="number" id="prod-reorder-point" class="form-control rounded-3" min="0" value="20" required>
                         </div>
                         <div class="row g-2 mb-3">
                             <div class="col-6">
@@ -939,6 +944,8 @@
                 let lowStockFound = false;
 
                 currentProducts.forEach(p => {
+                    const reorderThreshold = p.reorder_threshold ?? 20;
+                    const needsReorder = p.stock_quantity < reorderThreshold;
                     tbody.innerHTML += `
                         <tr>
                             <td>${p.product_id}</td>
@@ -946,7 +953,8 @@
                             <td class="fw-semibold">${p.product_name}</td>
                             <td>${(p.cost_price || 0).toFixed(2)} ฿</td>
                             <td>${(p.selling_price || 0).toFixed(2)} ฿</td>
-                            <td><span class="badge ${p.stock_quantity < 20 ? 'bg-warning text-dark' : 'bg-primary'}">${p.stock_quantity} ชิ้น</span></td>
+                            <td><span class="badge ${needsReorder ? 'bg-warning text-dark' : 'bg-primary'}">${p.stock_quantity} ชิ้น</span></td>
+                            <td>${reorderThreshold} ชิ้น</td>
                             <td>${p.manufacture_date || '-'}</td>
                             <td>${p.expiration_date || '-'}</td>
                             <td>
@@ -957,7 +965,7 @@
                             </td>
                         </tr>
                     `;
-                    if (p.stock_quantity < 20 && lowStockList) {
+                    if (needsReorder && lowStockList) {
                         lowStockFound = true;
                         const imgUrl = p.image_url || 'https://via.placeholder.com/50';
                         lowStockList.innerHTML += `
@@ -969,13 +977,13 @@
                                         <small class="text-muted">ราคาขาย: ${(p.selling_price || 0).toFixed(2)} ฿</small>
                                     </div>
                                 </div>
-                                <span class="badge bg-danger rounded-pill fs-6 px-3 py-2">${p.stock_quantity} ชิ้น</span>
+                                <span class="badge bg-danger rounded-pill fs-6 px-3 py-2">${p.stock_quantity} / ${reorderThreshold} ชิ้น</span>
                             </div>
                         `;
                     }
                 });
                 if (!lowStockFound && lowStockList) {
-                    lowStockList.innerHTML = '<div class="text-success text-center py-4 fs-5"><i class="fa-solid fa-circle-check me-2"></i>ไม่มีสินค้าสต็อกต่ำกว่า 20 ชิ้น</div>';
+                    lowStockList.innerHTML = '<div class="text-success text-center py-4 fs-5"><i class="fa-solid fa-circle-check me-2"></i>ไม่มีสินค้าถึงจุดเติมสต็อก</div>';
                 }
             } catch (err) { console.error("Products error:", err); }
         }
@@ -1368,6 +1376,7 @@
             document.getElementById('prod-cost').value = prod.cost_price;
             document.getElementById('prod-price').value = prod.selling_price;
             document.getElementById('prod-stock').value = prod.stock_quantity;
+            document.getElementById('prod-reorder-point').value = prod.reorder_threshold ?? 20;
             document.getElementById('prod-manufacture-date').value = prod.manufacture_date || '';
             document.getElementById('prod-expiration-date').value = prod.expiration_date || '';
             document.getElementById('prod-manufacture-date').required = false;
@@ -1386,6 +1395,7 @@
             formData.append('cost_price', document.getElementById('prod-cost').value);
             formData.append('selling_price', document.getElementById('prod-price').value);
             formData.append('stock_quantity', document.getElementById('prod-stock').value);
+            formData.append('reorder_threshold', document.getElementById('prod-reorder-point').value);
             formData.append('manufacture_date', document.getElementById('prod-manufacture-date').value);
             formData.append('expiration_date', document.getElementById('prod-expiration-date').value);
             const imgFile = document.getElementById('prod-image').files[0];
