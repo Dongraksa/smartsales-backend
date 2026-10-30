@@ -97,6 +97,19 @@
             background-color: #1d4ed8;
             transform: scale(1.1);
         }
+        .category-filter-btn {
+            border: 1px solid #bfdbfe;
+            border-radius: 999px;
+            padding: 6px 14px;
+            background: #fff;
+            color: #1d4ed8;
+            font-weight: 600;
+        }
+        .category-filter-btn.active {
+            background: #2563eb;
+            border-color: #2563eb;
+            color: #fff;
+        }
     </style>
 </head>
 <body>
@@ -159,7 +172,7 @@
                 <!-- LEFT AREA: PRODUCTS MENU -->
                 <div class="col-lg-8">
                     <h4 class="fw-bold text-dark mb-3"><i class="fa-solid fa-utensils me-2 text-primary"></i>เมนูเครื่องดื่มและเบเกอรี่</h4>
-                    
+                    <div id="product-category-filters" class="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="กรองสินค้าตามหมวดหมู่"></div>
                     <div class="row g-3" id="products-grid">
                         <div class="col-12 text-center py-5 text-muted">กำลังโหลดรายการสินค้า...</div>
                     </div>
@@ -403,6 +416,8 @@
         let cart = [];
         let activePromotions = [];
         let activeCouponCode = '';
+        let storeProducts = [];
+        let selectedProductCategory = 'all';
         let selectedCheckoutMember = null;
         let selectedPaymentMethod = 'PromptPay';
         let successModalObj = null;
@@ -512,14 +527,50 @@
                 const res = await fetch('/api/v1/products');
                 if (!res.ok) return;
                 const products = await res.json();
-                const grid = document.getElementById('products-grid');
-                if (!grid) return;
-                if (!products || products.length === 0) {
-                    grid.innerHTML = '<div class="col-12 text-center py-5 text-muted">ยังไม่มีสินค้าจำหน่ายในขณะนี้</div>';
-                    return;
-                }
-                grid.innerHTML = '';
-                products.forEach(p => {
+                storeProducts = Array.isArray(products) ? products : [];
+                renderProductCategoryFilters();
+                renderProductsGrid();
+            } catch (err) {
+                console.error("Error loading products:", err);
+            }
+        }
+
+        function renderProductCategoryFilters() {
+            const container = document.getElementById('product-category-filters');
+            if (!container) return;
+            const categories = [...new Set(storeProducts.map(product => (product.category || 'อื่นๆ').trim()).filter(Boolean))]
+                .sort((a, b) => a.localeCompare(b));
+            if (selectedProductCategory !== 'all' && !categories.includes(selectedProductCategory)) {
+                selectedProductCategory = 'all';
+            }
+            const filters = [{ label: 'ทั้งหมด', value: 'all' }, ...categories.map(category => ({ label: category, value: category }))];
+            container.replaceChildren(...filters.map(filter => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = `category-filter-btn${selectedProductCategory === filter.value ? ' active' : ''}`;
+                button.textContent = filter.label;
+                button.setAttribute('aria-pressed', String(selectedProductCategory === filter.value));
+                button.addEventListener('click', () => {
+                    selectedProductCategory = filter.value;
+                    renderProductCategoryFilters();
+                    renderProductsGrid();
+                });
+                return button;
+            }));
+        }
+
+        function renderProductsGrid() {
+            const grid = document.getElementById('products-grid');
+            if (!grid) return;
+            const products = selectedProductCategory === 'all'
+                ? storeProducts
+                : storeProducts.filter(product => (product.category || 'อื่นๆ').trim() === selectedProductCategory);
+            if (products.length === 0) {
+                grid.innerHTML = `<div class="col-12 text-center py-5 text-muted">${storeProducts.length ? 'ไม่มีสินค้าในหมวดหมู่นี้' : 'ยังไม่มีสินค้าจำหน่ายในขณะนี้'}</div>`;
+                return;
+            }
+            grid.innerHTML = '';
+            products.forEach(p => {
                     const imgUrl = p.image_url || 'https://via.placeholder.com/300';
                     grid.innerHTML += `
                         <div class="col-md-6 col-lg-4">
@@ -539,9 +590,6 @@
                         </div>
                     `;
                 });
-            } catch (err) {
-                console.error("Error loading products:", err);
-            }
         }
 
         async function loadPromotions() {
