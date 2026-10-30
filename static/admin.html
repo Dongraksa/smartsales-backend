@@ -247,6 +247,12 @@
                                 <i class="fa-solid fa-plus me-1"></i> เพิ่มสินค้าใหม่
                             </button>
                         </div>
+                        <div class="mb-3" style="max-width: 280px;">
+                            <label for="product-category-filter" class="form-label small fw-semibold">แสดงตามหมวดหมู่</label>
+                            <select id="product-category-filter" class="form-select rounded-3" onchange="fetchProducts()">
+                                <option value="">ทุกหมวดหมู่</option>
+                            </select>
+                        </div>
                         <div class="table-responsive">
                             <table class="table table-hover align-middle">
                                 <thead class="table-light">
@@ -254,6 +260,7 @@
                                         <th>ID</th>
                                         <th>รูปภาพ</th>
                                         <th>ชื่อสินค้า</th>
+                                        <th>หมวดหมู่</th>
                                         <th>ราคาทุน</th>
                                         <th>ราคาขาย</th>
                                         <th>สต็อกคงเหลือ</th>
@@ -264,7 +271,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="full-products-table-body">
-                                    <tr><td colspan="10" class="text-center py-4 text-muted">กำลังดึงข้อมูลสินค้า...</td></tr>
+                                    <tr><td colspan="11" class="text-center py-4 text-muted">กำลังดึงข้อมูลสินค้า...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -686,6 +693,11 @@
                     <form id="productForm" onsubmit="saveProductSubmit(event)">
                         <input type="hidden" id="prod-id">
                         <div class="mb-3">
+                            <label class="form-label small fw-semibold">หมวดหมู่</label>
+                            <input type="text" id="prod-category" list="product-category-options" class="form-control rounded-3" required>
+                            <datalist id="product-category-options"></datalist>
+                        </div>
+                        <div class="mb-3">
                             <label class="form-label small fw-semibold">ชื่อสินค้า</label>
                             <input type="text" id="prod-name" class="form-control rounded-3" required>
                         </div>
@@ -947,7 +959,24 @@
                 if (lowStockList) lowStockList.innerHTML = '';
                 let lowStockFound = false;
 
-                currentProducts.forEach(p => {
+                const categoryFilter = document.getElementById('product-category-filter');
+                const categoryOptions = document.getElementById('product-category-options');
+                const selectedCategory = categoryFilter?.value || '';
+                const categories = [...new Set(currentProducts.map(p => (p.category || 'อื่นๆ').trim()).filter(Boolean))]
+                    .sort((a, b) => a.localeCompare(b));
+                if (categoryFilter) {
+                    categoryFilter.replaceChildren(new Option('ทุกหมวดหมู่', ''));
+                    categories.forEach(category => categoryFilter.add(new Option(category, category)));
+                    categoryFilter.value = categories.includes(selectedCategory) ? selectedCategory : '';
+                }
+                if (categoryOptions) {
+                    categoryOptions.replaceChildren(...categories.map(category => new Option(category, category)));
+                }
+                const displayedProducts = categoryFilter?.value
+                    ? currentProducts.filter(p => (p.category || 'อื่นๆ').trim() === categoryFilter.value)
+                    : currentProducts;
+
+                displayedProducts.forEach(p => {
                     const reorderThreshold = p.reorder_threshold ?? 20;
                     const needsReorder = p.stock_quantity < reorderThreshold;
                     tbody.innerHTML += `
@@ -955,6 +984,7 @@
                             <td>${p.product_id}</td>
                             <td><img src="${p.image_url}" width="40" height="40" class="rounded-3 object-fit-cover"></td>
                             <td class="fw-semibold">${p.product_name}</td>
+                            <td>${escapeHtml(p.category || 'อื่นๆ')}</td>
                             <td>${(p.cost_price || 0).toFixed(2)} ฿</td>
                             <td>${(p.selling_price || 0).toFixed(2)} ฿</td>
                             <td><span class="badge ${needsReorder ? 'bg-warning text-dark' : 'bg-primary'}">${p.stock_quantity} ชิ้น</span></td>
@@ -969,6 +999,14 @@
                             </td>
                         </tr>
                     `;
+                });
+                if (displayedProducts.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="11" class="text-center py-4 text-muted">ไม่พบสินค้าในหมวดหมู่นี้</td></tr>';
+                }
+
+                currentProducts.forEach(p => {
+                    const reorderThreshold = p.reorder_threshold ?? 20;
+                    const needsReorder = p.stock_quantity < reorderThreshold;
                     if (needsReorder && lowStockList) {
                         lowStockFound = true;
                         const imgUrl = p.image_url || 'https://via.placeholder.com/50';
@@ -990,6 +1028,12 @@
                     lowStockList.innerHTML = '<div class="text-success text-center py-4 fs-5"><i class="fa-solid fa-circle-check me-2"></i>ไม่มีสินค้าถึงจุดเติมสต็อก</div>';
                 }
             } catch (err) { console.error("Products error:", err); }
+        }
+
+        function escapeHtml(value) {
+            const element = document.createElement('div');
+            element.textContent = value ?? '';
+            return element.innerHTML;
         }
 
         async function fetchROPData() {
@@ -1378,6 +1422,7 @@
             const prod = currentProducts.find(p => p.product_id === productId);
             if (!prod) return;
             document.getElementById('prod-id').value = prod.product_id;
+            document.getElementById('prod-category').value = prod.category || 'อื่นๆ';
             document.getElementById('prod-name').value = prod.product_name;
             document.getElementById('prod-cost').value = prod.cost_price;
             document.getElementById('prod-price').value = prod.selling_price;
@@ -1398,6 +1443,7 @@
             e.preventDefault();
             const prodId = document.getElementById('prod-id').value;
             const formData = new FormData();
+            formData.append('category', document.getElementById('prod-category').value);
             formData.append('product_name', document.getElementById('prod-name').value);
             formData.append('cost_price', document.getElementById('prod-cost').value);
             formData.append('selling_price', document.getElementById('prod-price').value);

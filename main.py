@@ -54,6 +54,7 @@ products_db = [
     {
         "product_id": 1,
         "product_name": "อเมริกาโน่เย็น (Iced Americano)",
+        "category": "เครื่องดื่ม",
         "cost_price": 25.0,
         "selling_price": 55.0,
         "stock_quantity": 45,
@@ -65,6 +66,7 @@ products_db = [
     {
         "product_id": 2,
         "product_name": "ลาเต้เย็น (Iced Latte)",
+        "category": "เครื่องดื่ม",
         "cost_price": 30.0,
         "selling_price": 65.0,
         "stock_quantity": 12,
@@ -76,6 +78,7 @@ products_db = [
     {
         "product_id": 3,
         "product_name": "ครัวซองต์เนยสด (Croissant)",
+        "category": "เบเกอรี่",
         "cost_price": 20.0,
         "selling_price": 45.0,
         "stock_quantity": 8,
@@ -305,6 +308,7 @@ def get_products():
 @app.post("/api/v1/admin/products")
 def create_product(
     product_name: str = Form(...),
+    category: str = Form(...),
     cost_price: float = Form(...),
     selling_price: float = Form(...),
     stock_quantity: int = Form(...),
@@ -327,6 +331,7 @@ def create_product(
     new_prod = {
         "product_id": new_id,
         "product_name": product_name,
+        "category": category.strip() or "อื่นๆ",
         "cost_price": cost_price,
         "selling_price": selling_price,
         "stock_quantity": stock_quantity,
@@ -344,6 +349,7 @@ def create_product(
 def update_product(
     product_id: int,
     product_name: str = Form(...),
+    category: Optional[str] = Form(None),
     cost_price: float = Form(...),
     selling_price: float = Form(...),
     stock_quantity: int = Form(...),
@@ -359,6 +365,8 @@ def update_product(
         raise HTTPException(status_code=404, detail="Product not found")
         
     prod["product_name"] = product_name
+    if category is not None:
+        prod["category"] = category.strip() or "อื่นๆ"
     prod["cost_price"] = cost_price
     prod["selling_price"] = selling_price
     prod["stock_quantity"] = stock_quantity
