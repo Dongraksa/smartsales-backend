@@ -721,7 +721,7 @@
         }
 
         function calculatePromotionsDiscount(subtotal) {
-            let discount = 0;
+            let bestDiscount = 0;
             getEligiblePromotions().forEach(promo => {
                 const productIds = new Set((promo.product_ids || []).map(Number));
                 const eligibleProductIds = promo.promo_type === 'discount_code' && productIds.size === 0
@@ -733,9 +733,9 @@
                 const promotionDiscount = promo.discount_type === 'percent'
                     ? eligibleSubtotal * Math.min(Number(promo.discount_amount), 100) / 100
                     : Number(promo.discount_amount);
-                discount += Math.min(promotionDiscount, eligibleSubtotal);
+                bestDiscount = Math.max(bestDiscount, Math.min(promotionDiscount, eligibleSubtotal));
             });
-            return Math.min(discount, subtotal);
+            return Math.min(bestDiscount, subtotal);
         }
 
         function getEligiblePromotions() {
@@ -747,7 +747,10 @@
                 }
                 if (promo.promo_type === 'cross_sell') {
                     const triggerProductIds = (promo.trigger_product_ids || []).map(Number);
-                    return triggerProductIds.some(productId => cartProductIds.has(productId)) &&
+                    const triggerSpend = cart
+                        .filter(item => triggerProductIds.includes(Number(item.product_id)))
+                        .reduce((sum, item) => sum + item.selling_price * item.quantity, 0);
+                    return triggerSpend >= Number(promo.minimum_spend_amount || 0) &&
                         productIds.some(productId => cartProductIds.has(productId));
                 }
                 if (promo.promo_type === 'discount_code') {

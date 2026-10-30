@@ -134,6 +134,7 @@ promotions_db = [
         "promo_type": "bundle",
         "product_ids": [1, 3],
         "trigger_product_ids": [],
+        "minimum_spend_amount": 0.0,
         "coupon_code": None,
         "discount_type": "fixed",
         "discount_amount": 15.0,
@@ -168,6 +169,7 @@ class PromotionSchema(BaseModel):
     promo_type: str
     product_ids: List[int] = Field(default_factory=list)
     trigger_product_ids: List[int] = Field(default_factory=list)
+    minimum_spend_amount: float = 0
     coupon_code: Optional[str] = None
     discount_type: str = "fixed"
     discount_amount: float
@@ -264,34 +266,59 @@ async def create_order(request: Request):
     if not raw_items:
         raise HTTPException(status_code=400, detail="ไม่มีรายการสินค้าในตะกร้า")
     
+    validated_lines = []
+    requested_quantities = defaultdict(int)
+    for item in raw_items:
+        try:
+            qty = int(item.get("quantity") or item.get("qty") or item.get("count") or 1)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="จำนวนสินค้าไม่ถูกต้อง")
+        if qty <= 0:
+            raise HTTPException(status_code=400, detail="จำนวนสินค้าต้องมากกว่าศูนย์")
+        raw_product_id = item.get("product_id") or item.get("id")
+        if raw_product_id is not None:
+            try:
+                product_id = int(raw_product_id)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="รหัสสินค้าไม่ถูกต้อง")
+            prod = next((p for p in products_db if p["product_id"] == product_id), None)
+        else:
+            p_name = item.get("product_name") or item.get("name") or item.get("title")
+            prod = next((p for p in products_db if p["product_name"] == p_name), None)
+        if not prod:
+            raise HTTPException(status_code=404, detail="ไม่พบสินค้าในระบบ")
+        product_id = prod["product_id"]
+        requested_quantities[product_id] += qty
+        validated_lines.append((prod, qty))
+
+    products_by_id = {product["product_id"]: product for product, _ in validated_lines}
+    for product_id, qty in requested_quantities.items():
+        if products_by_id[product_id]["stock_quantity"] < qty:
+            raise HTTPException(status_code=409, detail=f"สินค้า {products_by_id[product_id]['product_name']} มีสต็อกไม่เพียงพอ")
+
     processed_items = []
     total_amount = 0.0
     product_subtotals = defaultdict(float)
-    for item in raw_items:
-        p_name = item.get("product_name") or item.get("name") or item.get("title") or "สินค้า"
-        qty = int(item.get("quantity") or item.get("qty") or item.get("count") or 1)
-        price = float(item.get("selling_price") or item.get("price") or item.get("cost") or 0.0)
-        p_id = item.get("product_id") or item.get("id")
+    for prod, qty in validated_lines:
+        product_id = prod["product_id"]
+        p_name = prod["product_name"]
+        price = float(prod["selling_price"])
         subtotal = price * qty
         total_amount += subtotal
-        
-        prod = next((p for p in products_db if (p_id and p["product_id"] == p_id) or p["product_name"] == p_name), None)
-        if prod:
-            prod["stock_quantity"] = max(0, prod["stock_quantity"] - qty)
-            product_id = prod["product_id"]
-            product_subtotals[product_id] += subtotal
-        else:
-            product_id = p_id
-            
+        product_subtotals[product_id] += subtotal
         processed_items.append({
             "product_id": product_id,
             "product_name": p_name,
             "quantity": qty,
             "subtotal": subtotal,
-            "image_url": prod["image_url"] if prod else "https://via.placeholder.com/150"
+            "image_url": prod["image_url"]
         })
+    for product_id, qty in requested_quantities.items():
+        products_by_id[product_id]["stock_quantity"] -= qty
+
     applied_promotion_ids = []
     total_discount = 0.0
+    best_promotion_id = None
     now = datetime.now() + timedelta(hours=7)
     today = now.strftime("%Y-%m-%d")
     requested_promo_ids = data.get("promotion_ids", []) if isinstance(data, dict) else []
@@ -317,6 +344,7 @@ async def create_order(request: Request):
             product_ids = {int(product_id) for product_id in promo.get("product_ids", [])}
             trigger_product_ids = {int(product_id) for product_id in promo.get("trigger_product_ids", [])}
             discount_amount = max(0.0, float(promo.get("discount_amount", 0)))
+            minimum_spend_amount = max(0.0, float(promo.get("minimum_spend_amount", 0)))
         except (TypeError, ValueError):
             continue
         if promo.get("promo_type") == "bundle":
@@ -325,6 +353,9 @@ async def create_order(request: Request):
             eligible_product_ids = product_ids
         elif promo.get("promo_type") == "cross_sell":
             if not (trigger_product_ids & cart_product_ids) or not (product_ids & cart_product_ids):
+                continue
+            trigger_subtotal = sum(product_subtotals[product_id] for product_id in trigger_product_ids & cart_product_ids)
+            if trigger_subtotal < minimum_spend_amount:
                 continue
             eligible_product_ids = product_ids & cart_product_ids
         elif promo.get("promo_type") == "discount_code":
@@ -340,9 +371,13 @@ async def create_order(request: Request):
         else:
             applied_discount = min(discount_amount, eligible_subtotal)
         if applied_discount > 0:
-            total_discount += applied_discount
-            applied_promotion_ids.append(promo["promo_id"])
-            promo["usage_count"] = promo.get("usage_count", 0) + 1
+            if applied_discount > total_discount:
+                total_discount = applied_discount
+                best_promotion_id = promo["promo_id"]
+    if best_promotion_id is not None:
+        applied_promotion_ids.append(best_promotion_id)
+        applied_promo = next(p for p in promotions_db if p["promo_id"] == best_promotion_id)
+        applied_promo["usage_count"] = applied_promo.get("usage_count", 0) + 1
     total_discount = min(total_discount, total_amount)
     final_total = max(0.0, total_amount - total_discount)
     payment_method = "PromptPay"
@@ -862,6 +897,8 @@ def create_promotion(promo: PromotionSchema):
         raise HTTPException(status_code=422, detail="Discount type must be fixed or percent")
     if promo.discount_type == "percent" and promo.discount_amount > 100:
         raise HTTPException(status_code=422, detail="Percentage discount cannot exceed 100")
+    if not math.isfinite(promo.minimum_spend_amount) or promo.minimum_spend_amount < 0:
+        raise HTTPException(status_code=422, detail="Minimum spend cannot be negative")
     if promo.promo_type not in {"bundle", "cross_sell", "discount_code"}:
         raise HTTPException(status_code=422, detail="Unsupported promotion type")
     try:
@@ -873,13 +910,17 @@ def create_promotion(promo: PromotionSchema):
         raise HTTPException(status_code=422, detail="End date must be on or after start date")
     if len(set(promo.product_ids)) != len(promo.product_ids) or len(set(promo.trigger_product_ids)) != len(promo.trigger_product_ids):
         raise HTTPException(status_code=422, detail="Product selections must be unique")
-    if promo.promo_type == "bundle" and (len(promo.product_ids) < 2 or promo.trigger_product_ids):
-        raise HTTPException(status_code=422, detail="Bundle promotions require at least two products")
+    if promo.promo_type == "bundle" and (len(promo.product_ids) != 2 or promo.trigger_product_ids or promo.minimum_spend_amount > 0):
+        raise HTTPException(status_code=422, detail="Bundle promotions require exactly two products")
     if promo.promo_type == "cross_sell":
         if not promo.product_ids or not promo.trigger_product_ids:
             raise HTTPException(status_code=422, detail="Cross-selling requires trigger and discounted products")
+        if promo.minimum_spend_amount <= 0:
+            raise HTTPException(status_code=422, detail="Cross-selling requires a positive minimum spend")
         if set(promo.product_ids) & set(promo.trigger_product_ids):
             raise HTTPException(status_code=422, detail="Trigger and discounted products must differ")
+    elif promo.minimum_spend_amount != 0:
+        raise HTTPException(status_code=422, detail="Minimum spend is only supported for cross-selling")
     if promo.promo_type == "discount_code":
         if not promo.coupon_code or not promo.coupon_code.strip():
             raise HTTPException(status_code=422, detail="Coupon code is required")
@@ -899,7 +940,10 @@ def create_promotion(promo: PromotionSchema):
     if promo.promo_type == "bundle":
         condition_summary = " + ".join(target_names)
     elif promo.promo_type == "cross_sell":
-        condition_summary = f"เมื่อซื้อ {' / '.join(trigger_names)} รับส่วนลดสินค้า {' / '.join(target_names)}"
+        condition_summary = (
+            f"เมื่อซื้อ {' / '.join(trigger_names)} ครบ {promo.minimum_spend_amount:g} บาท "
+            f"รับส่วนลดสินค้า {' / '.join(target_names)}"
+        )
     else:
         condition_summary = "สินค้าทั้งหมด" if not target_names else " / ".join(target_names)
         condition_summary = f"รหัส {promo.coupon_code}: {condition_summary}"
@@ -910,6 +954,7 @@ def create_promotion(promo: PromotionSchema):
         "promo_type": promo.promo_type,
         "product_ids": promo.product_ids,
         "trigger_product_ids": promo.trigger_product_ids,
+        "minimum_spend_amount": promo.minimum_spend_amount,
         "coupon_code": promo.coupon_code,
         "discount_type": promo.discount_type,
         "discount_amount": promo.discount_amount,
@@ -935,6 +980,7 @@ def create_win_back_coupon(data: WinBackCouponSchema):
         "promo_type": "discount_code",
         "product_ids": [],
         "trigger_product_ids": [],
+        "minimum_spend_amount": 0.0,
         "coupon_code": f"WELCOME{new_id}",
         "discount_type": "fixed",
         "discount_amount": data.discount_amount,
