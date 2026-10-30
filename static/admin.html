@@ -16,24 +16,24 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
-            --bs-primary: #2563eb;
-            --bs-primary-rgb: 37, 99, 235;
-            --bs-success: #23835f;
-            --bs-success-rgb: 35, 131, 95;
-            --bs-warning: #b7791f;
-            --bs-warning-rgb: 183, 121, 31;
-            --bs-danger: #b64950;
-            --bs-danger-rgb: 182, 73, 80;
-            --admin-page: #f4f7fa;
+            --bs-primary: #0d6efd;
+            --bs-primary-rgb: 13, 110, 253;
+            --bs-success: #198754;
+            --bs-success-rgb: 25, 135, 84;
+            --bs-warning: #ffc107;
+            --bs-warning-rgb: 255, 193, 7;
+            --bs-danger: #dc3545;
+            --bs-danger-rgb: 220, 53, 69;
+            --admin-page: #f8fafc;
             --admin-surface: #ffffff;
-            --admin-text: #243445;
-            --admin-muted: #647487;
-            --admin-border: #d8e0e8;
-            --admin-sidebar: #1d3042;
+            --admin-text: #334155;
+            --admin-muted: #6c757d;
+            --admin-border: #dee2e6;
+            --admin-sidebar: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
             --admin-sidebar-active: #2563eb;
-            --admin-success: #23835f;
-            --admin-warning: #a96d16;
-            --admin-danger: #b64950;
+            --admin-success: #16a34a;
+            --admin-warning: #d97706;
+            --admin-danger: #dc2626;
         }
 
         * { font-family: 'Sarabun', sans-serif; }
@@ -46,7 +46,7 @@
             border-right: 1px solid #1c2d3a;
         }
         .sidebar .nav-link {
-            color: #d0d8de;
+            color: #94a3b8;
             border-radius: 6px;
             margin-bottom: 4px;
             padding: 10px 14px;
@@ -58,7 +58,7 @@
             color: white;
         }
         .sidebar .nav-link.active {
-            box-shadow: inset 3px 0 0 #8db9ff;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
         }
         .card-custom {
             border: 1px solid var(--admin-border);
@@ -76,16 +76,16 @@
             font-size: 1.2rem;
         }
         /* Thai Status Badges */
-        .badge-pending { background-color: #fff3d6; color: var(--admin-warning); }
-        .badge-paid { background-color: #e5edf2; color: var(--bs-primary); }
-        .badge-shipped { background-color: #e8edf0; color: #536a79; }
-        .badge-completed { background-color: #e5f1ea; color: var(--admin-success); }
-        .badge-cancelled { background-color: #f8e9e8; color: var(--admin-danger); }
-        .bg-purple { background-color: #526977; color: white; }
-        .text-purple { color: #526977 !important; }
-        .bg-purple-subtle { background-color: #edf1f3 !important; }
-        .btn-outline-purple { color: #526977; border-color: #8797a2; }
-        .btn-outline-purple:hover { color: white; background-color: #526977; border-color: #526977; }
+        .badge-pending { background-color: #fef3c7; color: #d97706; }
+        .badge-paid { background-color: #dbeafe; color: #2563eb; }
+        .badge-shipped { background-color: #e0e7ff; color: #4f46e5; }
+        .badge-completed { background-color: #dcfce7; color: #16a34a; }
+        .badge-cancelled { background-color: #fee2e2; color: #dc2626; }
+        .bg-purple { background-color: #9333ea; color: white; }
+        .text-purple { color: #7e22ce !important; }
+        .bg-purple-subtle { background-color: #f3e8ff !important; }
+        .btn-outline-purple { color: #9333ea; border-color: #9333ea; }
+        .btn-outline-purple:hover { color: white; background-color: #9333ea; border-color: #9333ea; }
         .text-muted { color: var(--admin-muted) !important; }
         .rounded-4 { border-radius: 8px !important; }
         .rounded-3 { border-radius: 6px !important; }
@@ -97,23 +97,23 @@
             box-shadow: 0 0 0 0.18rem rgba(49, 86, 111, 0.14);
         }
         .btn-primary {
-            --bs-btn-bg: #2563eb;
-            --bs-btn-border-color: #2563eb;
-            --bs-btn-hover-bg: #1f55cc;
-            --bs-btn-hover-border-color: #1f55cc;
-            --bs-btn-active-bg: #1b49b2;
-            --bs-btn-active-border-color: #1b49b2;
+            --bs-btn-bg: #0d6efd;
+            --bs-btn-border-color: #0d6efd;
+            --bs-btn-hover-bg: #0b5ed7;
+            --bs-btn-hover-border-color: #0a58ca;
+            --bs-btn-active-bg: #0a58ca;
+            --bs-btn-active-border-color: #0a53be;
         }
         .btn-outline-primary {
-            --bs-btn-color: #2563eb;
-            --bs-btn-border-color: #9bb9f5;
-            --bs-btn-hover-bg: #2563eb;
-            --bs-btn-hover-border-color: #2563eb;
-            --bs-btn-active-bg: #2563eb;
-            --bs-btn-active-border-color: #2563eb;
+            --bs-btn-color: #0d6efd;
+            --bs-btn-border-color: #0d6efd;
+            --bs-btn-hover-bg: #0d6efd;
+            --bs-btn-hover-border-color: #0d6efd;
+            --bs-btn-active-bg: #0d6efd;
+            --bs-btn-active-border-color: #0d6efd;
         }
         .text-primary { color: #2563eb !important; }
-        .bg-primary-subtle { background-color: #e9f0ff !important; }
+        .bg-primary-subtle { background-color: #dbeafe !important; }
         .shadow-sm { box-shadow: 0 1px 3px rgba(20, 35, 48, 0.06) !important; }
         .nav-pills .nav-link { border-radius: 6px; color: #52616d; }
         .nav-pills .nav-link.active { background-color: #2563eb; color: white; }
@@ -230,13 +230,13 @@
                     </div>
 
                     <!-- AI PROMOTION RECOMMENDATIONS BANNER -->
-                    <div class="card-custom p-4 mt-4">
+                    <div class="card-custom p-4 mt-4" style="border: 1px solid #e2e8f0; background: linear-gradient(135deg, #ffffff 0%, #f3e8ff 100%);">
                         <div class="d-flex align-items-center justify-content-between mb-3">
                             <div>
-                                <h5 class="fw-bold mb-1 text-dark"><i class="fa-solid fa-wand-magic-sparkles me-2 text-primary"></i>ข้อเสนอโปรโมชันแนะนำจาก AI (AI Smart Recommendations)</h5>
+                                <h5 class="fw-bold mb-1" style="color: #7e22ce;"><i class="fa-solid fa-wand-magic-sparkles me-2"></i>ข้อเสนอโปรโมชันแนะนำจาก AI (AI Smart Recommendations)</h5>
                                 <p class="text-muted small mb-0">จับคู่สินค้าขายดี + สินค้าขายช้า เพื่อเร่งการระบายสต็อกและกระตุ้นยอดขาย</p>
                             </div>
-                            <button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="switchTab('promotions')">ดูในหน้าโปรโมชัน</button>
+                            <button class="btn btn-sm btn-outline-purple rounded-pill px-3" style="color: #9333ea; border-color: #9333ea;" onclick="switchTab('promotions')">ดูในหน้าโปรโมชัน</button>
                         </div>
                         <div id="dash-ai-recommendations-list" class="row g-3">
                             <div class="col-12 text-center py-2 text-muted">กำลังประมวลผลข้อเสนอแนะนำจาก AI...</div>
@@ -538,7 +538,7 @@
                                 <h5 class="fw-bold mb-1 text-dark"><i class="fa-solid fa-wand-magic-sparkles me-2 text-primary"></i>ข้อเสนอโปรโมชันแนะนำจาก AI (AI Smart Recommendations)</h5>
                                 <p class="text-muted small mb-0">ระบบวิเคราะห์ข้อมูลการขายเพื่อจับคู่สินค้าขายดี (Top Seller) ร่วมกับสินค้าขายช้า (Slow Moving) ช่วยดันยอดขายและระบายสต็อก</p>
                             </div>
-                            <span class="badge bg-secondary px-3 py-2 fs-6">AI Auto-Matched</span>
+                            <span class="badge bg-purple px-3 py-2 fs-6">AI Auto-Matched</span>
                         </div>
                         <div id="ai-recommendations-list" class="row g-3">
                             <div class="col-12 text-center py-3 text-muted">กำลังประมวลผลหาคู่โปรโมชันแนะนำ...</div>
