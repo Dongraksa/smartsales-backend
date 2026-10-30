@@ -285,8 +285,17 @@
 
                 <!-- TAB 4: ADVANCED ANALYTICS (INCLUDES NEW CHURN RISK & PERSONAL PATTERNS) -->
                 <div id="tab-analytics" class="tab-content-item d-none">
-                    
+                    <div class="nav nav-pills flex-nowrap gap-2 mb-4 overflow-auto" id="analytics-subtabs" role="tablist">
+                        <button class="nav-link active text-nowrap" type="button" data-analytics-view="rfm" onclick="switchAnalyticsView('rfm', this)">RFM ลูกค้า</button>
+                        <button class="nav-link text-nowrap" type="button" data-analytics-view="churn" onclick="switchAnalyticsView('churn', this)">ความเสี่ยง Churn</button>
+                        <button class="nav-link text-nowrap" type="button" data-analytics-view="personal" onclick="switchAnalyticsView('personal', this)">พฤติกรรมรายบุคคล</button>
+                        <button class="nav-link text-nowrap" type="button" data-analytics-view="peak" onclick="switchAnalyticsView('peak', this)">ช่วงเวลาขายดี</button>
+                        <button class="nav-link text-nowrap" type="button" data-analytics-view="abc" onclick="switchAnalyticsView('abc', this)">ABC สินค้า</button>
+                        <button class="nav-link text-nowrap" type="button" data-analytics-view="basket" onclick="switchAnalyticsView('basket', this)">สินค้าซื้อคู่กัน</button>
+                    </div>
+
                     <!-- NEW SECTION 1: CUSTOMER CHURN RISK & RETENTION ANALYSIS -->
+                    <div class="analytics-view d-none" id="analytics-view-churn">
                     <div class="card-custom p-4 mb-4" style="border-left: 5px solid #dc2626;">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <div>
@@ -313,8 +322,10 @@
                             </table>
                         </div>
                     </div>
+                    </div>
 
                     <!-- NEW SECTION 2: PERSONAL SHOPPING PATTERNS & TIME PREFERENCES -->
+                    <div class="analytics-view d-none" id="analytics-view-personal">
                     <div class="card-custom p-4 mb-4" style="border-left: 5px solid #2563eb;">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <div>
@@ -340,40 +351,36 @@
                             </table>
                         </div>
                     </div>
+                    </div>
 
-                    <!-- Charts Row: Peak Hours & ABC Analysis -->
-                    <div class="row g-4 mb-4">
-                        <div class="col-lg-6">
-                            <div class="card-custom p-4 h-100 d-flex flex-column justify-content-between">
-                                <div>
-                                    <h5 class="fw-bold mb-3"><i class="fa-solid fa-clock-rotate-left text-primary me-2"></i>ช่วงเวลาขายดีรวมหน้าร้าน (Peak Hours Overall)</h5>
-                                    <div style="height: 240px;" class="mb-3">
-                                        <canvas id="peakHoursChart"></canvas>
-                                    </div>
-                                </div>
-                                <div class="insight-box border-primary text-dark">
-                                    <div class="fw-bold text-primary mb-1"><i class="fa-solid fa-lightbulb me-1"></i> สรุปผลลัพธ์ช่วงเวลาขายดี:</div>
-                                    <span id="peak-hours-summary">กำลังประมวลผลช่วงเวลาขายดีที่สุด...</span>
-                                </div>
+                    <div class="analytics-view d-none" id="analytics-view-peak">
+                        <div class="card-custom p-4">
+                            <h5 class="fw-bold mb-3"><i class="fa-solid fa-clock-rotate-left text-primary me-2"></i>ช่วงเวลาขายดีรวมหน้าร้าน (Peak Hours Overall)</h5>
+                            <div style="height: 320px;" class="mb-3">
+                                <canvas id="peakHoursChart"></canvas>
+                            </div>
+                            <div class="insight-box border-primary text-dark">
+                                <div class="fw-bold text-primary mb-1"><i class="fa-solid fa-lightbulb me-1"></i> สรุปผลลัพธ์ช่วงเวลาขายดี:</div>
+                                <span id="peak-hours-summary">กำลังประมวลผลช่วงเวลาขายดีที่สุด...</span>
                             </div>
                         </div>
-                        <div class="col-lg-6">
-                            <div class="card-custom p-4 h-100 d-flex flex-column justify-content-between">
-                                <div>
-                                    <h5 class="fw-bold mb-3"><i class="fa-solid fa-chart-pie text-success me-2"></i>จัดกลุ่มรายได้สินค้า (ABC Analysis)</h5>
-                                    <div style="height: 240px;" class="mb-3">
-                                        <canvas id="abcChart"></canvas>
-                                    </div>
-                                </div>
-                                <div class="insight-box border-success text-dark" style="border-left-color: #16a34a !important;">
-                                    <div class="fw-bold text-success mb-1"><i class="fa-solid fa-chart-line me-1"></i> สรุปผลลัพธ์สัดส่วนรายได้:</div>
-                                    <span id="abc-summary">กำลังประมวลผลการจัดกลุ่มรายได้สินค้า...</span>
-                                </div>
+                    </div>
+
+                    <div class="analytics-view d-none" id="analytics-view-abc">
+                        <div class="card-custom p-4">
+                            <h5 class="fw-bold mb-3"><i class="fa-solid fa-chart-pie text-success me-2"></i>จัดกลุ่มรายได้สินค้า (ABC Analysis)</h5>
+                            <div style="height: 320px;" class="mb-3">
+                                <canvas id="abcChart"></canvas>
+                            </div>
+                            <div class="insight-box border-success text-dark" style="border-left-color: #16a34a !important;">
+                                <div class="fw-bold text-success mb-1"><i class="fa-solid fa-chart-line me-1"></i> สรุปผลลัพธ์สัดส่วนรายได้:</div>
+                                <span id="abc-summary">กำลังประมวลผลการจัดกลุ่มรายได้สินค้า...</span>
                             </div>
                         </div>
                     </div>
 
                     <!-- RFM CUSTOMER SEGMENTATION TABLE -->
+                    <div class="analytics-view" id="analytics-view-rfm">
                     <div class="card-custom p-4 mb-4">
                         <h5 class="fw-bold mb-1 text-primary"><i class="fa-solid fa-users-viewfinder me-2"></i>การแบ่งกลุ่มลูกค้าตามพฤติกรรม (RFM Analysis)</h5>
                         <p class="text-muted small mb-3">จำแนกกลุ่มด้วย Recency (ซื้อล่าสุด), Frequency (ความถี่), และ Monetary (ยอดใช้จ่าย)</p>
@@ -395,8 +402,10 @@
                             </table>
                         </div>
                     </div>
+                    </div>
 
                     <!-- Market Basket Analysis Table Card -->
+                    <div class="analytics-view d-none" id="analytics-view-basket">
                     <div class="card-custom p-4">
                         <h5 class="fw-bold mb-1"><i class="fa-solid fa-diagram-project text-purple me-2"></i>การวิเคราะห์สินค้าซื้อคู่กัน (Market Basket Analysis)</h5>
                         <p class="text-muted small mb-3">ประมวลผลด้วย Apriori Algorithm เพื่อจัดโปรโมชันจับคู่สินค้าขายดี</p>
@@ -417,6 +426,7 @@
                                 </tbody>
                             </table>
                         </div>
+                    </div>
                     </div>
 
                 </div>
@@ -833,12 +843,7 @@
             if (pTitle) pTitle.innerText = titles[tabName] || 'SmartSales Admin';
 
             if (tabName === 'analytics') {
-                setTimeout(() => {
-                    renderAnalyticsCharts();
-                    fetchRFMData();
-                    fetchChurnRiskData();
-                    fetchPersonalPatternsData();
-                }, 100);
+                switchAnalyticsView('rfm');
             } else if (tabName === 'products') {
                 fetchROPData();
             } else if (tabName === 'orders') {
@@ -846,6 +851,23 @@
             } else if (tabName === 'promotions') {
                 fetchPromotions();
                 loadAIRecommendations();
+            }
+        }
+
+        function switchAnalyticsView(viewName, button) {
+            document.querySelectorAll('#analytics-subtabs .nav-link').forEach(tab => tab.classList.remove('active'));
+            const activeButton = button || document.querySelector(`#analytics-subtabs [data-analytics-view="${viewName}"]`);
+            activeButton?.classList.add('active');
+            document.querySelectorAll('#tab-analytics .analytics-view').forEach(view => view.classList.add('d-none'));
+            const activeView = document.getElementById(`analytics-view-${viewName}`);
+            if (!activeView) return;
+            activeView.classList.remove('d-none');
+
+            if (viewName === 'rfm') fetchRFMData();
+            else if (viewName === 'churn') fetchChurnRiskData();
+            else if (viewName === 'personal') fetchPersonalPatternsData();
+            else if (viewName === 'peak' || viewName === 'abc' || viewName === 'basket') {
+                setTimeout(() => renderAnalyticsCharts(viewName), 50);
             }
         }
 
@@ -1690,10 +1712,10 @@
             return `<div>${badgeHtml}<div class="small text-muted mt-1">${recText}</div></div>`;
         }
 
-        async function renderAnalyticsCharts() {
+        async function renderAnalyticsCharts(viewName = 'all') {
             try {
-                if (typeof Chart === 'undefined') return;
-                // 1. Peak Hours Analytics
+                if (typeof Chart === 'undefined' && (viewName === 'peak' || viewName === 'abc' || viewName === 'all')) return;
+            if (viewName === 'peak' || viewName === 'all') {
                 const peakRes = await fetch('/api/v1/analytics/peak-hours');
                 if (peakRes.ok) {
                     const peakData = await peakRes.json();
@@ -1735,7 +1757,8 @@
                         }
                     }
                 }
-                // 2. ABC Analysis
+                }
+                if (viewName === 'abc' || viewName === 'all') {
                 const abcRes = await fetch('/api/v1/analytics/abc-analysis');
                 if (abcRes.ok) {
                     const abcData = await abcRes.json();
@@ -1773,7 +1796,8 @@
                         }
                     }
                 }
-                // 3. Market Basket Analysis
+                }
+                if (viewName === 'basket' || viewName === 'all') {
                 const mbRes = await fetch('/api/v1/analytics/market-basket');
                 if (mbRes.ok) {
                     const mbData = await mbRes.json();
@@ -1807,6 +1831,7 @@
                             mbTbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">ไม่พบรูปแบบการซื้อคู่กันในขณะนี้</td></tr>';
                         }
                     }
+                }
                 }
             } catch (e) { 
                 console.error("Analytics chart error:", e); 
