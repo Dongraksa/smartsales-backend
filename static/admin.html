@@ -274,7 +274,7 @@
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <div>
                                 <h5 class="fw-bold mb-1 text-warning"><i class="fa-solid fa-boxes-stacked me-2"></i>จุดสั่งซื้อสินค้าเติม (Reorder Point - ROP)</h5>
-                                <p class="text-muted small mb-0">สูตรคำนวณ: ROP = (ยอดขายเฉลี่ย/วัน × Lead Time) + Safety Stock</p>
+                                <p class="text-muted small mb-0">สูตรคำนวณ: ROP = (ยอดใช้เฉลี่ย/วัน × Lead Time) + Safety Stock</p>
                             </div>
                             <button class="btn btn-sm btn-outline-warning rounded-pill px-3" onclick="fetchROPData()">
                                 <i class="fa-solid fa-rotate me-1"></i> รีเฟรช ROP
@@ -287,14 +287,13 @@
                                         <th>ID สินค้า</th>
                                         <th>ชื่อสินค้า</th>
                                         <th class="text-center">สต็อกปัจจุบัน</th>
-                                        <th class="text-center">ระยะเวลารอส่ง (Lead Time)</th>
                                         <th class="text-center">สต็อกสำรอง (Safety Stock)</th>
                                         <th class="text-center">จุดสั่งซื้อเติม (ROP)</th>
                                         <th class="text-center">สถานะการสั่งเติม</th>
                                     </tr>
                                 </thead>
                                 <tbody id="rop-tbody">
-                                    <tr><td colspan="7" class="text-center py-4 text-muted">กำลังคำนวณจุด ROP...</td></tr>
+                                    <tr><td colspan="6" class="text-center py-4 text-muted">กำลังคำนวณจุด ROP...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -1009,13 +1008,14 @@
                                 <td>#${item.product_id}</td>
                                 <td class="fw-bold">${item.product_name}</td>
                                 <td class="text-center font-bold">${item.current_stock} ชิ้น</td>
-                                <td class="text-center">${item.lead_time_days} วัน</td>
                                 <td class="text-center">${item.safety_stock} ชิ้น</td>
                                 <td class="text-center fw-bold text-primary">${item.reorder_point} ชิ้น</td>
                                 <td class="text-center">${badge}</td>
                             </tr>
                         `;
                     });
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">ไม่พบข้อมูลสำหรับคำนวณ ROP</td></tr>';
                 }
             } catch (e) { console.error("Fetch ROP Error:", e); }
         }

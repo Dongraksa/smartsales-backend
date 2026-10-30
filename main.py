@@ -309,8 +309,8 @@ def create_product(
     selling_price: float = Form(...),
     stock_quantity: int = Form(...),
     reorder_threshold: int = Form(20, ge=0),
-    lead_time_days: int = Form(3),
-    safety_stock: int = Form(10),
+    lead_time_days: int = Form(3, ge=0),
+    safety_stock: int = Form(10, ge=0),
     manufacture_date: str = Form(""),
     expiration_date: str = Form(""),
     image_file: Optional[UploadFile] = File(None)
@@ -348,8 +348,8 @@ def update_product(
     selling_price: float = Form(...),
     stock_quantity: int = Form(...),
     reorder_threshold: Optional[int] = Form(None, ge=0),
-    lead_time_days: int = Form(3),
-    safety_stock: int = Form(10),
+    lead_time_days: int = Form(3, ge=0),
+    safety_stock: int = Form(10, ge=0),
     manufacture_date: str = Form(""),
     expiration_date: str = Form(""),
     image_file: Optional[UploadFile] = File(None)
@@ -504,14 +504,25 @@ def get_market_basket(min_support: float = 0.01, min_confidence: float = 0.01):
 # --- REAL-DATA REORDER POINT (ROP) ANALYSIS ---
 @app.get("/api/v1/analytics/reorder-points")
 def get_reorder_points():
-    valid_orders = [o for o in orders_db if o.get("status") in ["Paid", "Completed"]]
-    
+    now = datetime.now() + timedelta(hours=7)
+    cutoff = now - timedelta(days=30)
     product_sales_qty = defaultdict(int)
-    for order in valid_orders:
+    for order in orders_db:
+        if order.get("status") not in ["Paid", "Completed"]:
+            continue
+        try:
+            order_time = datetime.strptime(order.get("timestamp", ""), "%Y-%m-%d %H:%M:%S")
+        except (TypeError, ValueError):
+            continue
+        if not cutoff <= order_time <= now:
+            continue
         for item in order.get("items", []):
             p_name = item.get("product_name")
-            qty = item.get("quantity", 1)
-            if p_name:
+            try:
+                qty = int(item.get("quantity", 1))
+            except (TypeError, ValueError):
+                continue
+            if p_name and qty > 0:
                 product_sales_qty[p_name] += qty
     results = []
     days_evaluated = 30
@@ -520,7 +531,7 @@ def get_reorder_points():
         p_name = p["product_name"]
         total_sold = product_sales_qty.get(p_name, 0)
         
-        daily_usage = round(max(1.0, total_sold / days_evaluated), 1)
+        daily_usage = total_sold / days_evaluated
         lead_time = p.get("lead_time_days", 3)
         safety = p.get("safety_stock", 10)
         stock = p.get("stock_quantity", 0)
@@ -532,7 +543,7 @@ def get_reorder_points():
             "product_id": p["product_id"],
             "product_name": p_name,
             "current_stock": stock,
-            "daily_usage": daily_usage,
+            "daily_usage": round(daily_usage, 2),
             "lead_time_days": lead_time,
             "safety_stock": safety,
             "reorder_point": rop,
