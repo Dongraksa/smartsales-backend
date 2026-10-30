@@ -86,6 +86,9 @@
                     <a class="nav-link active" data-tab="dashboard" href="#" onclick="switchTab('dashboard')">
                         <i class="fa-solid fa-house me-2"></i> แดชบอร์ด
                     </a>
+                    <a class="nav-link" data-tab="orders" href="#" onclick="switchTab('orders')">
+                        <i class="fa-solid fa-inbox me-2"></i> ออเดอร์ที่เข้าระบบ
+                    </a>
                     <a class="nav-link" data-tab="products" href="#" onclick="switchTab('products')">
                         <i class="fa-solid fa-boxes-stacked me-2"></i> สต็อกสินค้า & ROP
                     </a>
@@ -170,30 +173,6 @@
                         </div>
                     </div>
 
-                    <!-- Recent Orders Table -->
-                    <div class="card-custom p-4">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h5 class="fw-bold mb-0">📦 ออเดอร์ล่าสุดที่เข้ามาในระบบ</h5>
-                        </div>
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>ID ออเดอร์</th>
-                                        <th>วัน-เวลา</th>
-                                        <th>ชำระโดย</th>
-                                        <th>ยอดรวม</th>
-                                        <th>สถานะ</th>
-                                        <th>การจัดการ</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="dash-recent-orders-body">
-                                    <tr><td colspan="6" class="text-center py-4 text-muted">กำลังดึงข้อมูล...</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
                     <!-- AI PROMOTION RECOMMENDATIONS BANNER -->
                     <div class="card-custom p-4 mt-4" style="border: 1px solid #e2e8f0; background: linear-gradient(135deg, #ffffff 0%, #f3e8ff 100%);">
                         <div class="d-flex align-items-center justify-content-between mb-3">
@@ -209,21 +188,21 @@
                     </div>
                 </div>
 
-                <!-- TAB 2: ORDERS MANAGEMENT -->
-                <div id="tab-orders" class="tab-content-item d-none" hidden>
+                <!-- TAB 2: INCOMING ORDERS -->
+                <div id="tab-orders" class="tab-content-item d-none">
                     <div class="card-custom p-4">
-                        <h5 class="fw-bold mb-3">จัดการและติดตามสถานะออเดอร์</h5>
+                        <h5 class="fw-bold mb-3">ออเดอร์ที่เข้าระบบ</h5>
                         <div class="table-responsive">
                             <table class="table table-hover align-middle">
                                 <thead class="table-light">
                                     <tr>
-                                        <th>ID</th>
+                                        <th>ID ออเดอร์</th>
                                         <th>วัน-เวลา</th>
                                         <th>ช่องทางชำระ</th>
                                         <th>รายการสินค้า</th>
                                         <th>ราคารวม</th>
                                         <th>สถานะออเดอร์</th>
-                                        <th>เปลี่ยนสถานะ</th>
+                                        <th>รายละเอียด</th>
                                     </tr>
                                 </thead>
                                 <tbody id="full-orders-table-body">
@@ -711,19 +690,6 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4">
-                    <div class="bg-light p-3 rounded-3 mb-3 d-flex justify-content-between align-items-center">
-                        <span class="fw-bold small text-muted">ปรับเปลี่ยนสถานะออเดอร์:</span>
-                        <div class="d-flex align-items-center gap-2">
-                            <select id="modal-order-status-select" class="form-select form-select-sm fw-bold rounded-pill" style="width: 170px;">
-                                <option value="Paid">ชำระเงินแล้ว</option>
-                                <option value="Completed">เสร็จสิ้น</option>
-                                <option value="Cancelled">ยกเลิก</option>
-                                <option value="Pending">รอดำเนินการ</option>
-                                <option value="Shipped">กำลังจัดส่ง</option>
-                            </select>
-                            <button class="btn btn-sm btn-primary rounded-pill px-3" id="modal-save-status-btn">บันทึกสถานะ</button>
-                        </div>
-                    </div>
                     <div id="modal-order-items-list" class="mb-3" style="max-height: 350px; overflow-y: auto;"></div>
                     
                     <div class="d-flex justify-content-between align-items-center fw-bold fs-5 pt-3 border-top">
@@ -806,11 +772,9 @@
         let revenueModalObj = null;
         let lowStockModalObj = null;
         let promoModalObj = null;
-        let activeModalSaleId = null;
         let currentProducts = [];
         let currentPromoRecommendations = [];
         let revenueChartInstance = null;
-        let isUserEditingStatus = false;
         let selectedPeriod = 'all';
 
         const statusTH = {
@@ -841,16 +805,6 @@
                 }
             }
 
-            const btnSaveStatus = document.getElementById('modal-save-status-btn');
-            if (btnSaveStatus) {
-                btnSaveStatus.addEventListener('click', async function() {
-                    if (!activeModalSaleId) return;
-                    const newStatus = document.getElementById('modal-order-status-select').value;
-                    await changeOrderStatus(activeModalSaleId, newStatus);
-                    if (orderDetailsModalObj) orderDetailsModalObj.hide();
-                });
-            }
-
             const todayStr = new Date().toISOString().split('T')[0];
             const promoStart = document.getElementById('promo-start');
             if (promoStart) promoStart.value = todayStr;
@@ -861,7 +815,6 @@
         });
 
         function switchTab(tabName) {
-            if (tabName === 'orders') return;
             document.querySelectorAll('.tab-content-item').forEach(el => el.classList.add('d-none'));
             document.querySelectorAll('.sidebar .nav-link').forEach(el => el.classList.remove('active'));
             const targetTab = document.getElementById(`tab-${tabName}`);
@@ -871,6 +824,7 @@
 
             const titles = {
                 'dashboard': 'แดชบอร์ดผู้ดูแลระบบ',
+                'orders': 'ออเดอร์ที่เข้าระบบ',
                 'products': 'จัดการสต็อกและระบบคำนวณ ROP',
                 'analytics': 'วิเคราะห์พฤติกรรมการขายขั้นสูง (Analytics, RFM, Churn & Personal Patterns)',
                 'promotions': 'ระบบจัดการโปรโมชันและแคมเปญ'
@@ -887,6 +841,8 @@
                 }, 100);
             } else if (tabName === 'products') {
                 fetchROPData();
+            } else if (tabName === 'orders') {
+                fetchOrders();
             } else if (tabName === 'promotions') {
                 fetchPromotions();
                 loadAIRecommendations();
@@ -1007,40 +963,23 @@
         }
 
         async function fetchOrders() {
-            if (isUserEditingStatus) return;
             try {
                 const res = await fetch(`/api/v1/admin/orders?_t=${Date.now()}`);
                 if (!res.ok) return;
                 const orders = await res.json();
-                const dashTbody = document.getElementById('dash-recent-orders-body');
                 const fullTbody = document.getElementById('full-orders-table-body');
-                if (!dashTbody || !fullTbody) return;
+                if (!fullTbody) return;
 
                 if (!orders || orders.length === 0) {
-                    dashTbody.innerHTML = '<tr><td colspan="6" class="text-center py-3 text-muted">ยังไม่มีออเดอร์ในระบบ</td></tr>';
                     fullTbody.innerHTML = '<tr><td colspan="7" class="text-center py-3 text-muted">ยังไม่มีออเดอร์ในระบบ</td></tr>';
                     return;
                 }
 
-                dashTbody.innerHTML = '';
                 fullTbody.innerHTML = '';
-                orders.forEach((o, idx) => {
+                orders.forEach(o => {
                     const badgeClass = getBadgeClass(o.status || 'Paid');
                     const totalAmt = (o.total_amount || 0).toFixed(2);
                     const statusTextText = statusTH[o.status] || o.status || 'ชำระเงินแล้ว';
-                    
-                    if (idx < 5) {
-                        dashTbody.innerHTML += `
-                            <tr>
-                                <td class="fw-bold">#${o.sale_id}</td>
-                                <td class="small">${o.timestamp}</td>
-                                <td>${o.payment_method || 'PromptPay'}</td>
-                                <td class="fw-bold text-success">${totalAmt} ฿</td>
-                                <td><span class="badge ${badgeClass}">${statusTextText}</span></td>
-                                <td><button class="btn btn-sm btn-light border" onclick="viewOrderItems(${o.sale_id})">ดูสินค้า</button></td>
-                            </tr>
-                        `;
-                    }
 
                     const itemsArr = o.items || [];
                     const itemsText = itemsArr.map(i => `${i.product_name} (x${i.quantity})`).join(', ');
@@ -1053,18 +992,7 @@
                             <td class="small text-truncate" style="max-width:200px;">${itemsText}</td>
                             <td class="fw-bold text-success">${totalAmt} ฿</td>
                             <td><span class="badge ${badgeClass}">${statusTextText}</span></td>
-                            <td>
-                                <select class="form-select form-select-sm" 
-                                    onfocus="isUserEditingStatus = true" 
-                                    onblur="isUserEditingStatus = false" 
-                                    onchange="changeOrderStatus(${o.sale_id}, this.value)">
-                                    <option value="Paid" ${o.status === 'Paid' ? 'selected' : ''}>ชำระเงินแล้ว</option>
-                                    <option value="Completed" ${o.status === 'Completed' ? 'selected' : ''}>เสร็จสิ้น</option>
-                                    <option value="Cancelled" ${o.status === 'Cancelled' ? 'selected' : ''}>ยกเลิก</option>
-                                    <option value="Pending" ${o.status === 'Pending' ? 'selected' : ''}>รอดำเนินการ</option>
-                                    <option value="Shipped" ${o.status === 'Shipped' ? 'selected' : ''}>กำลังจัดส่ง</option>
-                                </select>
-                            </td>
+                            <td><button class="btn btn-sm btn-light border" onclick="viewOrderItems(${o.sale_id})">ดูสินค้า</button></td>
                         </tr>
                     `;
                 });
@@ -1630,14 +1558,12 @@
 
         async function viewOrderItems(saleId) {
             try {
-                activeModalSaleId = saleId;
                 const res = await fetch('/api/v1/admin/orders');
                 const orders = await res.json();
                 const order = orders.find(o => o.sale_id === saleId);
                 if (!order) return;
                 document.getElementById('modal-order-id').innerText = '#' + order.sale_id;
                 document.getElementById('modal-order-total').innerText = (order.total_amount || 0).toFixed(2) + ' ฿';
-                document.getElementById('modal-order-status-select').value = order.status || 'Paid';
                 const container = document.getElementById('modal-order-items-list');
                 container.innerHTML = '';
                 (order.items || []).forEach(i => {
@@ -1657,21 +1583,6 @@
                 });
                 if (orderDetailsModalObj) orderDetailsModalObj.show();
             } catch (e) { console.error(e); }
-        }
-
-        async function changeOrderStatus(saleId, newStatus) {
-            try {
-                await fetch(`/api/v1/admin/orders/${saleId}/status`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status: newStatus })
-                });
-                isUserEditingStatus = false;
-                loadAllAdminData();
-            } catch (err) { 
-                isUserEditingStatus = false;
-                alert('ไม่สามารถเปลี่ยนสถานะได้'); 
-            }
         }
 
         function openAddProductModal() {
