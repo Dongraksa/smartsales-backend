@@ -132,6 +132,8 @@ promotions_db = [
         "promo_id": 1,
         "title": "เซตคู่กาแฟ & ครัวซองต์สุดคุ้ม",
         "promo_type": "bundle",
+        "product_ids": [1, 3],
+        "discount_amount": 15.0,
         "discount_text": "ซื้อคู่กันลด 15 บาท",
         "condition_summary": "อเมริกาโน่เย็น + ครัวซองต์เนยสด",
         "usage_count": 28,
@@ -161,8 +163,8 @@ class OrderStatusUpdate(BaseModel):
 class PromotionSchema(BaseModel):
     title: str
     promo_type: str
-    discount_text: str
-    condition_summary: str
+    product_ids: List[int]
+    discount_amount: float
     start_date: str
     end_date: str
 
@@ -258,6 +260,7 @@ async def create_order(request: Request):
     
     processed_items = []
     total_amount = 0.0
+    product_subtotals = defaultdict(float)
     for item in raw_items:
         p_name = item.get("product_name") or item.get("name") or item.get("title") or "สินค้า"
         qty = int(item.get("quantity") or item.get("qty") or item.get("count") or 1)
@@ -269,13 +272,54 @@ async def create_order(request: Request):
         prod = next((p for p in products_db if (p_id and p["product_id"] == p_id) or p["product_name"] == p_name), None)
         if prod:
             prod["stock_quantity"] = max(0, prod["stock_quantity"] - qty)
+            product_id = prod["product_id"]
+            product_subtotals[product_id] += subtotal
+        else:
+            product_id = p_id
             
         processed_items.append({
+            "product_id": product_id,
             "product_name": p_name,
             "quantity": qty,
             "subtotal": subtotal,
             "image_url": prod["image_url"] if prod else "https://via.placeholder.com/150"
         })
+    applied_promotion_ids = []
+    total_discount = 0.0
+    now = datetime.now() + timedelta(hours=7)
+    today = now.strftime("%Y-%m-%d")
+    requested_promo_ids = data.get("promotion_ids", []) if isinstance(data, dict) else []
+    if not isinstance(requested_promo_ids, list):
+        requested_promo_ids = []
+    seen_promo_ids = set()
+    for raw_promo_id in requested_promo_ids:
+        try:
+            promo_id = int(raw_promo_id)
+        except (TypeError, ValueError):
+            continue
+        if promo_id in seen_promo_ids:
+            continue
+        seen_promo_ids.add(promo_id)
+        promo = next((p for p in promotions_db if p["promo_id"] == promo_id), None)
+        if not promo or not promo.get("is_active"):
+            continue
+        if not promo.get("start_date", "") <= today <= promo.get("end_date", ""):
+            continue
+        try:
+            product_ids = {int(product_id) for product_id in promo.get("product_ids", [])}
+            discount_amount = max(0.0, float(promo.get("discount_amount", 0)))
+        except (TypeError, ValueError):
+            continue
+        if not product_ids or not product_ids.issubset(product_subtotals):
+            continue
+        eligible_subtotal = sum(product_subtotals[product_id] for product_id in product_ids)
+        applied_discount = min(discount_amount, eligible_subtotal)
+        if applied_discount > 0:
+            total_discount += applied_discount
+            applied_promotion_ids.append(promo["promo_id"])
+            promo["usage_count"] = promo.get("usage_count", 0) + 1
+    total_discount = min(total_discount, total_amount)
+    final_total = max(0.0, total_amount - total_discount)
     payment_method = "PromptPay"
     customer_name = "ลูกค้าทั่วไป"
     if isinstance(data, dict):
@@ -288,7 +332,9 @@ async def create_order(request: Request):
         "customer_name": customer_name,
         "timestamp": (datetime.now() + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S"),
         "payment_method": payment_method,
-        "total_amount": round(total_amount, 2),
+        "subtotal_amount": round(total_amount, 2),
+        "discount_amount": round(total_discount, 2),
+        "total_amount": round(final_total, 2),
         "status": "Paid",
         "items": processed_items
     }
@@ -297,7 +343,10 @@ async def create_order(request: Request):
         "status": "success",
         "message": "สั่งซื้อสำเร็จเรียบร้อยแล้ว",
         "sale_id": sale_id,
-        "total_amount": round(total_amount, 2)
+        "subtotal_amount": round(total_amount, 2),
+        "discount_amount": round(total_discount, 2),
+        "total_amount": round(final_total, 2),
+        "promotion_ids": applied_promotion_ids
     }
 
 # --- PRODUCTS MANAGEMENT ---
@@ -782,13 +831,31 @@ def get_promotions():
 
 @app.post("/api/v1/admin/promotions")
 def create_promotion(promo: PromotionSchema):
+    if not math.isfinite(promo.discount_amount) or promo.discount_amount <= 0:
+        raise HTTPException(status_code=422, detail="Discount must be greater than zero")
+    try:
+        start_date = datetime.strptime(promo.start_date, "%Y-%m-%d").date()
+        end_date = datetime.strptime(promo.end_date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Dates must use YYYY-MM-DD format")
+    if end_date < start_date:
+        raise HTTPException(status_code=422, detail="End date must be on or after start date")
+    if not promo.product_ids or len(set(promo.product_ids)) != len(promo.product_ids):
+        raise HTTPException(status_code=422, detail="Select one or more unique products")
+    selected_products = [p for p in products_db if p["product_id"] in promo.product_ids]
+    if len(selected_products) != len(promo.product_ids) or any(p["stock_quantity"] <= 0 for p in selected_products):
+        raise HTTPException(status_code=400, detail="Selected products must exist and have stock")
+
     new_id = len(promotions_db) + 1
+    condition_summary = " + ".join(p["product_name"] for p in selected_products)
     new_promo = {
         "promo_id": new_id,
         "title": promo.title,
         "promo_type": promo.promo_type,
-        "discount_text": promo.discount_text,
-        "condition_summary": promo.condition_summary,
+        "product_ids": promo.product_ids,
+        "discount_amount": promo.discount_amount,
+        "discount_text": f"ลด {promo.discount_amount:g} บาท",
+        "condition_summary": condition_summary,
         "usage_count": 0,
         "is_active": True,
         "start_date": promo.start_date,

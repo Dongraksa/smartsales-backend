@@ -581,12 +581,14 @@
                             </select>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small fw-semibold">เงื่อนไขสินค้า / ข้อกำหนด</label>
-                            <input type="text" id="promo-condition" class="form-control rounded-3" placeholder="เช่น อเมริกาโน่เย็น + ครัวซองต์" required>
+                            <label class="form-label small fw-semibold">สินค้าในโปรโมชัน (เลือกได้หลายรายการ)</label>
+                            <select id="promo-products" class="form-select rounded-3" multiple size="5" required>
+                                <option value="" disabled>กำลังโหลดสินค้า...</option>
+                            </select>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small fw-semibold">ข้อความส่วนลดที่แสดงให้ลูกค้าเห็น</label>
-                            <input type="text" id="promo-discount-text" class="form-control rounded-3" placeholder="เช่น ซื้อคู่กันลดทันที 15 บาท" required>
+                            <label class="form-label small fw-semibold">ส่วนลด (บาท)</label>
+                            <input type="number" id="promo-discount-amount" class="form-control rounded-3" min="0.01" step="0.01" required>
                         </div>
                         <div class="row g-2 mb-3">
                             <div class="col-6">
@@ -1308,20 +1310,45 @@
             } catch (e) { console.error("Fetch Promo Error:", e); }
         }
 
-        function openCreatePromoModal() {
+        async function openCreatePromoModal() {
             document.getElementById('promoForm').reset();
             const todayStr = new Date().toISOString().split('T')[0];
             document.getElementById('promo-start').value = todayStr;
+            const productSelect = document.getElementById('promo-products');
+            productSelect.replaceChildren(new Option('กำลังโหลดสินค้า...', ''));
+            try {
+                const res = await fetch(`/api/v1/products?_t=${Date.now()}`);
+                if (!res.ok) throw new Error('Unable to load products');
+                const products = await res.json();
+                const inStockProducts = products.filter(product => Number(product.stock_quantity) > 0);
+                productSelect.replaceChildren();
+                if (inStockProducts.length === 0) {
+                    productSelect.add(new Option('ไม่มีสินค้าในสต็อก', '', true, true));
+                    productSelect.options[0].disabled = true;
+                } else {
+                    inStockProducts.forEach(product => {
+                        productSelect.add(new Option(
+                            `${product.product_name} (คงเหลือ ${product.stock_quantity} ชิ้น)`,
+                            product.product_id
+                        ));
+                    });
+                }
+            } catch (err) {
+                productSelect.replaceChildren(new Option('โหลดรายการสินค้าไม่สำเร็จ', '', true, true));
+                productSelect.options[0].disabled = true;
+            }
             if (promoModalObj) promoModalObj.show();
         }
 
         async function savePromoSubmit(e) {
             e.preventDefault();
+            const discountAmount = Number(document.getElementById('promo-discount-amount').value);
             const payload = {
                 title: document.getElementById('promo-title').value,
                 promo_type: document.getElementById('promo-type').value,
-                condition_summary: document.getElementById('promo-condition').value,
-                discount_text: document.getElementById('promo-discount-text').value,
+                product_ids: Array.from(document.getElementById('promo-products').selectedOptions)
+                    .map(option => Number(option.value)),
+                discount_amount: discountAmount,
                 start_date: document.getElementById('promo-start').value,
                 end_date: document.getElementById('promo-end').value
             };

@@ -588,7 +588,15 @@
                 const res = await fetch('/api/v1/admin/promotions');
                 if (!res.ok) return;
                 const promos = await res.json();
-                activePromotions = promos.filter(p => p.is_active);
+                const today = new Date().toISOString().slice(0, 10);
+                activePromotions = promos.filter(p =>
+                    p.is_active &&
+                    p.start_date <= today &&
+                    p.end_date >= today &&
+                    Array.isArray(p.product_ids) &&
+                    p.product_ids.length > 0 &&
+                    Number(p.discount_amount) > 0
+                );
                 const container = document.getElementById('active-promotions-list');
                 if (!container) return;
                 if (activePromotions.length === 0) {
@@ -703,14 +711,21 @@
 
         function calculatePromotionsDiscount(subtotal) {
             let discount = 0;
-            const hasAmericano = cart.some(i => i.product_name.includes('อเมริกาโน่'));
-            const hasCroissant = cart.some(i => i.product_name.includes('ครัวซองต์'));
-            activePromotions.forEach(promo => {
-                if (promo.promo_type === 'bundle' && hasAmericano && hasCroissant) {
-                    discount += 15.0;
-                }
+            getEligiblePromotions().forEach(promo => {
+                const productIds = new Set(promo.product_ids.map(Number));
+                const eligibleSubtotal = cart
+                    .filter(item => productIds.has(Number(item.product_id)))
+                    .reduce((sum, item) => sum + item.selling_price * item.quantity, 0);
+                discount += Math.min(Number(promo.discount_amount), eligibleSubtotal);
             });
-            return discount;
+            return Math.min(discount, subtotal);
+        }
+
+        function getEligiblePromotions() {
+            const cartProductIds = new Set(cart.map(item => Number(item.product_id)));
+            return activePromotions.filter(promo =>
+                promo.product_ids.every(productId => cartProductIds.has(Number(productId)))
+            );
         }
 
         function selectPaymentMethod(method, btnEl) {
@@ -731,7 +746,8 @@
             const payload = {
                 customer_name: customerName,
                 items: cart,
-                payment_method: selectedPaymentMethod
+                payment_method: selectedPaymentMethod,
+                promotion_ids: getEligiblePromotions().map(promo => promo.promo_id)
             };
 
             try {
