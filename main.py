@@ -838,12 +838,15 @@ def get_promo_recommendations():
 
     sorted_products = []
     for p in products_db:
+        if p.get("stock_quantity", 0) <= 0:
+            continue
         p_name = p["product_name"]
         sold_qty = product_sales.get(p_name, 0)
         sorted_products.append({
             "product_id": p["product_id"],
             "product_name": p_name,
             "selling_price": p["selling_price"],
+            "stock_quantity": p["stock_quantity"],
             "sold_qty": sold_qty
         })
     
@@ -854,15 +857,17 @@ def get_promo_recommendations():
         top_product = sorted_products[0]
         slow_product = sorted_products[-1]
 
-        recommended_discount = round((top_product["selling_price"] + slow_product["selling_price"]) * 0.15, -1)
-        if recommended_discount < 10: recommended_discount = 10
-
         recommendations.append({
             "rec_id": 1,
             "title": f"เซตกระตุ้นยอดขาย: {top_product['product_name']} + {slow_product['product_name']}",
-            "promo_type": "Bundle Deal",
+            "promo_type": "bundle",
+            "product_ids": [top_product["product_id"], slow_product["product_id"]],
+            "trigger_product_ids": [],
+            "minimum_spend_amount": 0,
+            "discount_type": "percent",
+            "discount_amount": 15,
             "condition_summary": f"{top_product['product_name']} + {slow_product['product_name']}",
-            "discount_text": f"ซื้อคู่กันลด {int(recommended_discount)} บาท",
+            "discount_text": "ซื้อคู่กันลด 15%",
             "reason": f"จับคู่สินค้าขายดี ({top_product['product_name']} ขายได้ {top_product['sold_qty']} ชิ้น) กับสินค้าขายช้า ({slow_product['product_name']} ขายได้ {slow_product['sold_qty']} ชิ้น) เพื่อเร่งการระบายสต็อก"
         })
 
@@ -870,15 +875,17 @@ def get_promo_recommendations():
         second_top = sorted_products[1]
         slow_product = sorted_products[-1]
 
-        recommended_discount_2 = round((second_top["selling_price"] + slow_product["selling_price"]) * 0.10, -1)
-        if recommended_discount_2 < 10: recommended_discount_2 = 10
-
         recommendations.append({
             "rec_id": 2,
             "title": f"เซ็ตจับคู่เพิ่มยอด: {second_top['product_name']} + {slow_product['product_name']}",
-            "promo_type": "Cross-Selling",
-            "condition_summary": f"{second_top['product_name']} + {slow_product['product_name']}",
-            "discount_text": f"ซื้อคู่กันลด {int(recommended_discount_2)} บาท",
+            "promo_type": "cross_sell",
+            "product_ids": [slow_product["product_id"]],
+            "trigger_product_ids": [second_top["product_id"]],
+            "minimum_spend_amount": second_top["selling_price"],
+            "discount_type": "percent",
+            "discount_amount": 10,
+            "condition_summary": f"ซื้อ {second_top['product_name']} ครบ {second_top['selling_price']:g} บาท แล้วซื้อ {slow_product['product_name']}",
+            "discount_text": "ลด 10% สำหรับสินค้าแลกซื้อ",
             "reason": f"ช่วยดันยอดขาย {slow_product['product_name']} (ขายได้ {slow_product['sold_qty']} ชิ้น) โดยพ่วงกับ {second_top['product_name']}"
         })
 
